@@ -2,6 +2,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter, useNavigate } from 'react-router-dom'
 import { ClerkProvider } from '@clerk/react'
+import { shadcn } from '@clerk/ui/themes'
 import './index.css'
 import App from './App.jsx'
 
@@ -19,6 +20,7 @@ function ClerkProviderWithRoutes() {
       routerPush={(to) => navigate(to)}
       routerReplace={(to) => navigate(to, { replace: true })}
       afterSignOutUrl="/"
+      appearance={{ theme: shadcn }}
     >
       <App />
     </ClerkProvider>
