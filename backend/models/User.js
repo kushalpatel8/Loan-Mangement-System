@@ -1,13 +1,12 @@
 import mongoose from "mongoose"
-import bcrypt from "bcryptjs"
 
 const userSchema = new mongoose.Schema(
   {
-    name: {
+    clerkId: {
       type: String,
-      required: [true, "Name is required"],
-      trim: true,
-      maxlength: [100, "Name cannot exceed 100 characters"]
+      required: [true, "Clerk ID is required"],
+      unique: true,
+      index: true
     },
     email: {
       type: String,
@@ -17,10 +16,11 @@ const userSchema = new mongoose.Schema(
       trim: true,
       match: [/^\S+@\S+\.\S+$/, "Please provide a valid email address"]
     },
-    password: {
+    name: {
       type: String,
-      required: [true, "Password is required"],
-      minlength: [6, "Password must be at least 6 characters long"]
+      required: [true, "Name is required"],
+      trim: true,
+      maxlength: [100, "Name cannot exceed 100 characters"]
     },
     role: {
       type: String,
@@ -35,63 +35,23 @@ const userSchema = new mongoose.Schema(
       trim: true,
       default: ""
     },
-    clerkId: {
+    imageUrl: {
       type: String,
-      sparse: true,
-      index: true
+      default: ""
     },
-    refreshTokens: [
-      {
-        token: {
-          type: String,
-          required: true
-        },
-        createdAt: {
-          type: Date,
-          default: Date.now
-        },
-        expiresAt: {
-          type: Date
-        }
-      }
-    ],
     isActive: {
       type: Boolean,
       default: true
+    },
+    metadata: {
+      type: mongoose.Schema.Types.Mixed,
+      default: {}
     }
   },
   {
     timestamps: true
   }
 )
-
-// Pre-save hook to hash password before saving
-userSchema.pre("save", async function (next) {
-  if (!this.isModified("password")) {
-    return next()
-  }
-
-  try {
-    const salt = await bcrypt.genSalt(10)
-    this.password = await bcrypt.hash(this.password, salt)
-    next()
-  } catch (error) {
-    next(error)
-  }
-})
-
-// Compare candidate password with stored hash
-userSchema.methods.comparePassword = async function (candidatePassword) {
-  return bcrypt.compare(candidatePassword, this.password)
-}
-
-// Strip password and refreshTokens when converting to JSON
-userSchema.methods.toJSON = function () {
-  const user = this.toObject()
-  delete user.password
-  delete user.refreshTokens
-  return user
-}
 
 const User = mongoose.model("User", userSchema)
 
