@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
-import { Link } from 'react-router-dom'
-import { Show } from '@clerk/react'
+import { Link, useNavigate } from 'react-router-dom'
+import { Show, useUser } from '@clerk/react'
 
 const LOAN_TYPES = [
   {
@@ -13,9 +13,9 @@ const LOAN_TYPES = [
     minTenure: 12,
     maxTenure: 60,
     defaultTenure: 24,
-    description: 'Instant funds for medical emergencies, weddings, travel, or debt consolidation with minimal documentation.',
+    description: 'Instant funds for personal goals, medical emergencies, or renovations with minimal documentation.',
     badge: 'Popular',
-    color: 'blue'
+    tagColor: 'bg-amber-100 text-amber-900 border-amber-300'
   },
   {
     id: 'home',
@@ -27,9 +27,9 @@ const LOAN_TYPES = [
     minTenure: 36,
     maxTenure: 360,
     defaultTenure: 180,
-    description: 'Low interest rates and extended tenures to help you purchase, construct, or renovate your dream home.',
+    description: 'Competitive interest rates with long tenures to purchase, construct, or renovate your dream residence.',
     badge: 'Lowest Rate',
-    color: 'emerald'
+    tagColor: 'bg-emerald-100 text-emerald-900 border-emerald-300'
   },
   {
     id: 'vehicle',
@@ -41,9 +41,9 @@ const LOAN_TYPES = [
     minTenure: 12,
     maxTenure: 84,
     defaultTenure: 48,
-    description: 'Quick financing for new or pre-owned two-wheelers and four-wheelers with flexible repayment terms.',
+    description: 'Rapid financing for new or certified two-wheelers and four-wheelers with flexible repayment terms.',
     badge: 'Fast Disbursal',
-    color: 'amber'
+    tagColor: 'bg-orange-100 text-orange-900 border-orange-300'
   },
   {
     id: 'business',
@@ -55,16 +55,39 @@ const LOAN_TYPES = [
     minTenure: 12,
     maxTenure: 60,
     defaultTenure: 36,
-    description: 'Working capital, machinery purchase, and business expansion credit for SMEs and entrepreneurs.',
+    description: 'Working capital, inventory financing, and equipment upgrades tailored for scaling enterprises.',
     badge: 'High Limit',
-    color: 'purple'
+    tagColor: 'bg-purple-100 text-purple-900 border-purple-300'
   }
 ]
 
 export default function HomePage() {
+  const { isSignedIn, user } = useUser()
+  const navigate = useNavigate()
   const [selectedLoanType, setSelectedLoanType] = useState(LOAN_TYPES[0].id)
   const [amount, setAmount] = useState(LOAN_TYPES[0].defaultAmount)
   const [tenure, setTenure] = useState(LOAN_TYPES[0].defaultTenure)
+
+  const handleStartJourney = () => {
+    if (!isSignedIn) {
+      // First time user: navigate to sign up, which will immediately prompt role selection
+      navigate('/sign-up')
+      return
+    }
+
+    const role = sessionStorage.getItem('lms_user_role')
+    const roleSelected = sessionStorage.getItem('lms_role_selected') === 'true'
+
+    if (!roleSelected) {
+      navigate('/select-role')
+    } else if (role === 'admin') {
+      navigate('/admin')
+    } else if (role === 'loan_officer') {
+      navigate('/officer')
+    } else {
+      navigate('/applicant')
+    }
+  }
 
   const activeLoan = LOAN_TYPES.find((l) => l.id === selectedLoanType) || LOAN_TYPES[0]
 
@@ -101,121 +124,178 @@ export default function HomePage() {
     }
   }, [amount, tenure, activeLoan.rate])
 
-  const principalPercent = totalAmount > 0 ? Math.round((amount / totalAmount) * 100) : 50
-  const interestPercent = 100 - principalPercent
-
   return (
-    <div className="w-full text-slate-800">
-      {/* Hero Section */}
-      <section className="relative overflow-hidden bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 text-white py-20 px-6 sm:px-12 rounded-3xl shadow-2xl mb-16">
-        <div className="absolute inset-0 opacity-10 bg-[radial-gradient(#38bdf8_1px,transparent_1px)] [background-size:16px_16px]"></div>
-        <div className="relative max-w-5xl mx-auto text-center">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-indigo-500/20 border border-indigo-400/30 text-indigo-300 text-xs sm:text-sm font-medium mb-6">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-            End-to-End Credit Workflow Platform
+    <div className="w-full">
+      {/* 
+        HERO SECTION - Replicating the warm, ambient gradient aesthetic from the reference image:
+        - Soft radial ambient glow (amber/rose/peach to warm cream)
+        - Pill badge with delicate leaf icon
+        - Deep rich dark-cocoa heading (#361B14 / #2B1510) with vibrant warm gradient accent
+        - Generous spacing, clean line-height, balanced typography
+        - Warm orange-to-amber CTA button with gentle pill style + clean neutral secondary button
+        - Pill outline exploration button below
+      */}
+      <section className="relative overflow-hidden pt-12 pb-24 md:pt-20 md:pb-32 px-4 sm:px-6 lg:px-8">
+        {/* Soft background ambient gradient glow blobs */}
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-6xl h-[620px] pointer-events-none -z-10 opacity-70">
+          <div className="absolute top-4 left-1/4 w-96 h-96 bg-gradient-to-tr from-amber-200/50 via-rose-200/40 to-orange-100/30 rounded-full blur-3xl transform -translate-y-12"></div>
+          <div className="absolute top-12 right-1/4 w-96 h-96 bg-gradient-to-bl from-pink-200/40 via-amber-100/50 to-orange-200/40 rounded-full blur-3xl transform translate-x-12"></div>
+          <div className="absolute top-28 left-1/2 -translate-x-1/2 w-[600px] h-80 bg-gradient-to-b from-amber-100/40 via-rose-100/30 to-transparent rounded-full blur-2xl"></div>
+        </div>
+
+        <div className="max-w-4xl mx-auto text-center">
+          {/* Top Pill Badge matching "Your Mental Health Sanctuary" */}
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-amber-50/90 border border-amber-200/80 shadow-xs mb-8 transition hover:bg-amber-100/80">
+            <span className="text-amber-700 text-sm">🍃</span>
+            <span className="text-xs sm:text-sm font-medium text-amber-900 tracking-wide">
+              Your Intelligent Credit Sanctuary
+            </span>
           </div>
-          <h1 className="text-4xl sm:text-6xl font-extrabold tracking-tight leading-tight mb-6">
-            Smart, Transparent &amp; Fast <br className="hidden sm:inline" />
-            <span className="bg-gradient-to-r from-blue-400 via-indigo-300 to-sky-300 bg-clip-text text-transparent">
-              Loan Management System
+
+          {/* Main Headline with dual-color typography from reference image */}
+          <h1 className="text-4xl sm:text-6xl md:text-7xl font-extrabold tracking-tight text-[#3A1700] leading-[1.12] mb-6">
+            Empowerment Starts With a <br className="hidden sm:inline" />
+            <span className="bg-gradient-to-r from-amber-600 via-rose-600 to-orange-500 bg-clip-text text-transparent">
+              Single Sanction
             </span>
           </h1>
-          <p className="text-base sm:text-xl text-slate-300 max-w-3xl mx-auto mb-10 leading-relaxed">
-            Experience seamless digital lending — from automated rule-based eligibility checks and multi-stage officer reviews to final approval and dynamic EMI repayment schedules.
+
+          {/* Subtitle with soft comfortable line length */}
+          <p className="max-w-2xl mx-auto text-base sm:text-lg text-[#5C3D2E] leading-relaxed mb-10 font-normal">
+            Experience a revolutionary loan management ecosystem. We blend the limitless accuracy of automated deterministic eligibility checks with the profound oversight of accredited credit officers and administrators to guide your financial ambitions.
           </p>
 
-          <div className="flex flex-wrap items-center justify-center gap-4">
+          {/* Primary Action Button Group matching the image layout */}
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4 mb-6">
+            <button
+              onClick={handleStartJourney}
+              className="w-full sm:w-auto px-8 py-3.5 rounded-xl font-bold text-white text-base bg-gradient-to-r from-amber-500 via-amber-600 to-orange-500 hover:from-amber-600 hover:to-orange-600 shadow-lg shadow-orange-500/25 transition transform active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
+            >
+              Start Journey
+            </button>
+
             <Show when="signed-out">
               <Link
-                to="/sign-up"
-                className="px-8 py-3.5 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-xl shadow-lg shadow-blue-600/30 transition transform hover:-translate-y-0.5"
+                to="/sign-in"
+                className="w-full sm:w-auto px-8 py-3.5 rounded-xl font-semibold text-stone-800 text-base bg-[#F8F5EE] hover:bg-[#F0ECE2] border border-stone-200/90 transition flex items-center justify-center"
               >
-                Apply for Loan
-              </Link>
-              <Link
-                to="/login"
-                className="px-8 py-3.5 bg-slate-800/80 hover:bg-slate-800 text-slate-200 border border-slate-700 font-semibold rounded-xl transition hover:border-slate-500"
-              >
-                Track Application
+                Sign In
               </Link>
             </Show>
+
             <Show when="signed-in">
-              <a
-                href="#calculator"
-                className="px-8 py-3.5 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-xl shadow-lg shadow-blue-600/30 transition transform hover:-translate-y-0.5"
+              <button
+                onClick={handleStartJourney}
+                className="w-full sm:w-auto px-8 py-3.5 rounded-xl font-semibold text-stone-800 text-base bg-[#F8F5EE] hover:bg-[#F0ECE2] border border-stone-200/90 transition flex items-center justify-center cursor-pointer"
               >
-                Calculate EMI
-              </a>
-              <a
-                href="#workflow"
-                className="px-8 py-3.5 bg-slate-800/80 hover:bg-slate-800 text-slate-200 border border-slate-700 font-semibold rounded-xl transition hover:border-slate-500"
-              >
-                View Workflow
-              </a>
+                My Dashboard
+              </button>
             </Show>
           </div>
 
-          {/* Quick Metrics */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-16 pt-12 border-t border-slate-800 text-left">
-            <div className="p-4 rounded-xl bg-slate-800/40 border border-slate-700/50">
-              <div className="text-2xl sm:text-3xl font-bold text-white">8.5%</div>
-              <div className="text-xs text-slate-400 mt-1">Starting Interest Rate</div>
-            </div>
-            <div className="p-4 rounded-xl bg-slate-800/40 border border-slate-700/50">
-              <div className="text-2xl sm:text-3xl font-bold text-emerald-400">Instant</div>
-              <div className="text-xs text-slate-400 mt-1">Rule-Based Eligibility</div>
-            </div>
-            <div className="p-4 rounded-xl bg-slate-800/40 border border-slate-700/50">
-              <div className="text-2xl sm:text-3xl font-bold text-sky-400">3-Stage</div>
-              <div className="text-xs text-slate-400 mt-1">Applicant &rarr; Officer &rarr; Admin</div>
-            </div>
-            <div className="p-4 rounded-xl bg-slate-800/40 border border-slate-700/50">
-              <div className="text-2xl sm:text-3xl font-bold text-amber-400">100%</div>
-              <div className="text-xs text-slate-400 mt-1">Audit Trail &amp; Transparency</div>
-            </div>
+          {/* Outline pill exploration button directly underneath matching reference */}
+          <div className="inline-block">
+            <a
+              href="#calculator"
+              className="inline-flex items-center gap-2 px-5 py-2 rounded-full text-xs sm:text-sm font-medium text-[#7C533F] bg-white/70 hover:bg-white border border-stone-300/80 shadow-2xs transition"
+            >
+              <span>🌐</span>
+              <span>Explore Instant EMI Simulator</span>
+            </a>
           </div>
         </div>
       </section>
 
-      {/* Interactive EMI Calculator Section */}
-      <section id="calculator" className="py-8 mb-16">
-        <div className="text-center max-w-2xl mx-auto mb-12">
-          <h2 className="text-3xl font-bold tracking-tight text-slate-900">
-            Interactive Loan EMI Calculator
-          </h2>
-          <p className="text-slate-600 mt-2">
-            Calculate your monthly installment, preview total interest, and plan your repayment with complete clarity.
-          </p>
-        </div>
+      {/* Main Container for Loan Products & EMI Tool */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Interactive Loan Products Tabs */}
+        <section className="mb-16">
+          <div className="text-center max-w-2xl mx-auto mb-10">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-100/70 text-amber-900 border border-amber-200 mb-3">
+              ✦ Transparent Credit
+            </div>
+            <h2 className="text-2xl sm:text-4xl font-extrabold text-[#3A1700] tracking-tight">
+              Tailored Credit Products
+            </h2>
+            <p className="text-stone-600 text-sm sm:text-base mt-2">
+              Select your loan category to configure your custom tenure and interest parameters.
+            </p>
+          </div>
 
-        <div className="bg-white border border-slate-200 rounded-2xl shadow-xl overflow-hidden p-6 sm:p-10">
-          {/* Loan Type Selector */}
-          <div className="flex flex-wrap gap-2.5 mb-8 pb-6 border-b border-slate-100">
-            {LOAN_TYPES.map((type) => (
-              <button
-                key={type.id}
-                onClick={() => handleLoanTypeChange(type)}
-                className={`px-4 py-2.5 rounded-xl font-medium text-sm transition cursor-pointer ${
-                  selectedLoanType === type.id
-                    ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
-                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                }`}
-              >
-                {type.name} <span className="opacity-80 text-xs">({type.rate}%)</span>
-              </button>
-            ))}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+            {LOAN_TYPES.map((loan) => {
+              const isSelected = selectedLoanType === loan.id
+              return (
+                <div
+                  key={loan.id}
+                  onClick={() => handleLoanTypeChange(loan)}
+                  className={`cursor-pointer rounded-2xl p-6 transition-all duration-200 border-2 relative flex flex-col justify-between ${
+                    isSelected
+                      ? 'bg-white border-amber-500 shadow-xl shadow-amber-500/10 ring-2 ring-amber-500/20'
+                      : 'bg-white/80 border-stone-200 hover:border-stone-300 hover:bg-white hover:shadow-md'
+                  }`}
+                >
+                  <div>
+                    <div className="flex justify-between items-start mb-3">
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border uppercase tracking-wider ${loan.tagColor}`}>
+                        {loan.badge}
+                      </span>
+                      <span className="text-lg font-black text-[#3A1700]">
+                        {loan.rate}% <span className="text-[10px] text-stone-500 font-normal">p.a.</span>
+                      </span>
+                    </div>
+                    <h3 className="font-bold text-lg text-stone-900 mb-2">{loan.name}</h3>
+                    <p className="text-xs text-stone-600 leading-relaxed mb-4">{loan.description}</p>
+                  </div>
+
+                  <div className="pt-4 border-t border-stone-100 flex items-center justify-between text-xs">
+                    <span className="text-stone-500">Max Credit:</span>
+                    <span className="font-bold text-stone-800">
+                      ₹{(loan.maxAmount / 100000).toLocaleString('en-IN')} Lakhs
+                    </span>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </section>
+
+        {/* Live EMI Calculator Desk */}
+        <section id="calculator" className="py-12 px-6 sm:px-12 bg-white rounded-3xl border border-stone-200/80 shadow-md shadow-stone-200/40 mb-16">
+          <div className="max-w-3xl mx-auto text-center mb-10">
+            <span className="text-xs font-bold uppercase tracking-wider text-amber-700 bg-amber-50 px-3 py-1 rounded-full border border-amber-200">
+              Deterministic Calculation
+            </span>
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-[#3A1700] mt-3">
+              Live EMI Repayment Preview
+            </h2>
+            <p className="text-stone-600 text-sm mt-1">
+              Adjust principal and tenure to instantly preview your monthly installments and total interest obligation.
+            </p>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
-            {/* Sliders Area */}
-            <div className="lg:col-span-7 space-y-6">
-              {/* Amount Slider */}
-              <div className="space-y-2">
-                <div className="flex justify-between items-center text-sm">
-                  <span className="font-semibold text-slate-700">Loan Amount</span>
-                  <span className="text-lg font-bold text-blue-600">
+            {/* Sliders Input Column */}
+            <div className="lg:col-span-7 space-y-7 bg-stone-50/60 p-6 sm:p-8 rounded-2xl border border-stone-200/80">
+              {/* Selected Category Summary */}
+              <div className="flex items-center justify-between pb-4 border-b border-stone-200">
+                <div>
+                  <span className="text-xs text-stone-500">Selected Product</span>
+                  <p className="font-bold text-stone-900 text-base">{activeLoan.name}</p>
+                </div>
+                <div className="text-right">
+                  <span className="text-xs text-stone-500">Fixed Rate</span>
+                  <p className="font-bold text-amber-700 text-base">{activeLoan.rate}% p.a.</p>
+                </div>
+              </div>
+
+              {/* Loan Amount Slider */}
+              <div>
+                <div className="flex justify-between items-center mb-2">
+                  <label className="text-xs sm:text-sm font-semibold text-stone-700">Loan Amount</label>
+                  <div className="px-3 py-1 bg-white border border-stone-300 rounded-lg text-sm font-bold text-stone-900">
                     ₹{Number(amount).toLocaleString('en-IN')}
-                  </span>
+                  </div>
                 </div>
                 <input
                   type="range"
@@ -224,21 +304,21 @@ export default function HomePage() {
                   step={10000}
                   value={amount}
                   onChange={(e) => setAmount(Number(e.target.value))}
-                  className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                  className="w-full h-2 bg-stone-200 rounded-lg appearance-none cursor-pointer accent-amber-600"
                 />
-                <div className="flex justify-between text-xs text-slate-400">
-                  <span>₹{activeLoan.minAmount.toLocaleString('en-IN')}</span>
-                  <span>₹{activeLoan.maxAmount.toLocaleString('en-IN')}</span>
+                <div className="flex justify-between text-[11px] text-stone-400 mt-1">
+                  <span>₹{(activeLoan.minAmount / 100000).toFixed(1)} L</span>
+                  <span>₹{(activeLoan.maxAmount / 100000).toFixed(1)} L</span>
                 </div>
               </div>
 
               {/* Tenure Slider */}
-              <div className="space-y-2">
-                <div className="flex justify-between items-center text-sm">
-                  <span className="font-semibold text-slate-700">Tenure</span>
-                  <span className="text-lg font-bold text-blue-600">
-                    {tenure} Months <span className="text-xs text-slate-500">({(tenure / 12).toFixed(1)} yrs)</span>
-                  </span>
+              <div>
+                <div className="flex justify-between items-center mb-2">
+                  <label className="text-xs sm:text-sm font-semibold text-stone-700">Repayment Tenure</label>
+                  <div className="px-3 py-1 bg-white border border-stone-300 rounded-lg text-sm font-bold text-stone-900">
+                    {tenure} Months ({Math.round((tenure / 12) * 10) / 10} Yrs)
+                  </div>
                 </div>
                 <input
                   type="range"
@@ -247,263 +327,142 @@ export default function HomePage() {
                   step={6}
                   value={tenure}
                   onChange={(e) => setTenure(Number(e.target.value))}
-                  className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                  className="w-full h-2 bg-stone-200 rounded-lg appearance-none cursor-pointer accent-amber-600"
                 />
-                <div className="flex justify-between text-xs text-slate-400">
-                  <span>{activeLoan.minTenure} months</span>
-                  <span>{activeLoan.maxTenure} months</span>
+                <div className="flex justify-between text-[11px] text-stone-400 mt-1">
+                  <span>{activeLoan.minTenure} Mo</span>
+                  <span>{activeLoan.maxTenure} Mo</span>
                 </div>
-              </div>
-
-              {/* Fixed Rate Note */}
-              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center justify-between text-sm">
-                <div>
-                  <span className="text-slate-500">Benchmark Interest Rate:</span>
-                  <span className="ml-2 font-bold text-slate-800">{activeLoan.rate}% p.a.</span>
-                </div>
-                <span className="px-2.5 py-1 text-xs font-semibold rounded-md bg-blue-50 text-blue-700">
-                  {activeLoan.badge}
-                </span>
               </div>
             </div>
 
-            {/* Result Card */}
-            <div className="lg:col-span-5 bg-gradient-to-br from-slate-900 to-indigo-950 text-white rounded-2xl p-6 sm:p-8 flex flex-col justify-between shadow-xl">
+            {/* Results Display Column */}
+            <div className="lg:col-span-5 bg-gradient-to-br from-[#2E1810] to-[#1E0F0A] text-white p-6 sm:p-8 rounded-2xl shadow-xl flex flex-col justify-between">
               <div>
-                <span className="text-xs font-semibold tracking-wider uppercase text-slate-400">
-                  Monthly Repayment
+                <span className="text-[11px] font-semibold text-amber-300/80 uppercase tracking-widest">
+                  Monthly Installment
                 </span>
-                <div className="text-4xl font-extrabold text-emerald-400 mt-2 mb-6">
+                <div className="text-3xl sm:text-4xl font-black text-white mt-1 mb-6">
                   ₹{monthlyEmi.toLocaleString('en-IN')}
-                  <span className="text-sm font-normal text-slate-300"> / month</span>
+                  <span className="text-xs font-normal text-stone-300 ml-1">/ month</span>
                 </div>
 
-                <div className="space-y-3 pt-4 border-t border-slate-800 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Principal Amount:</span>
-                    <span className="font-semibold text-white">₹{Number(amount).toLocaleString('en-IN')}</span>
+                <div className="space-y-3.5 border-t border-white/10 pt-5 text-xs sm:text-sm">
+                  <div className="flex justify-between text-stone-300">
+                    <span>Principal Amount:</span>
+                    <span className="font-bold text-white">₹{Number(amount).toLocaleString('en-IN')}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Total Interest Payable:</span>
-                    <span className="font-semibold text-amber-400">₹{totalInterest.toLocaleString('en-IN')}</span>
+                  <div className="flex justify-between text-stone-300">
+                    <span>Total Interest Charge:</span>
+                    <span className="font-bold text-amber-300">₹{totalInterest.toLocaleString('en-IN')}</span>
                   </div>
-                  <div className="flex justify-between text-base font-bold pt-2 border-t border-slate-800">
-                    <span className="text-slate-200">Total Payable Amount:</span>
-                    <span className="text-white">₹{totalAmount.toLocaleString('en-IN')}</span>
-                  </div>
-                </div>
-
-                {/* Progress Visual */}
-                <div className="mt-6">
-                  <div className="h-2 w-full bg-slate-800 rounded-full overflow-hidden flex">
-                    <div style={{ width: `${principalPercent}%` }} className="bg-blue-500 h-full" title={`Principal: ${principalPercent}%`}></div>
-                    <div style={{ width: `${interestPercent}%` }} className="bg-amber-400 h-full" title={`Interest: ${interestPercent}%`}></div>
-                  </div>
-                  <div className="flex justify-between text-xs text-slate-400 mt-2">
-                    <span className="flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-blue-500"></span> Principal ({principalPercent}%)
-                    </span>
-                    <span className="flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-amber-400"></span> Interest ({interestPercent}%)
-                    </span>
+                  <div className="flex justify-between text-stone-300 border-t border-white/10 pt-3">
+                    <span className="font-semibold text-stone-200">Total Payable Amount:</span>
+                    <span className="font-extrabold text-white text-base">₹{totalAmount.toLocaleString('en-IN')}</span>
                   </div>
                 </div>
               </div>
 
               <div className="mt-8">
                 <Link
-                  to="/sign-up"
-                  className="block text-center w-full py-3 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-xl transition shadow-md"
+                  to="/applicant/apply"
+                  className="w-full py-3 px-4 rounded-xl text-center font-bold text-sm bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white shadow-lg shadow-orange-500/30 transition block"
                 >
-                  Apply with this Plan
+                  Apply For This Loan &rarr;
                 </Link>
               </div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* Loan Products Grid */}
-      <section className="py-8 mb-16">
-        <div className="text-center max-w-2xl mx-auto mb-12">
-          <h2 className="text-3xl font-bold tracking-tight text-slate-900">
-            Tailored Loan Products
-          </h2>
-          <p className="text-slate-600 mt-2">
-            Choose from flexible financing products designed to support your personal goals and business growth.
-          </p>
-        </div>
+        {/* 4-Step Governance Flow */}
+        <section className="py-12 px-6 sm:px-12 bg-white rounded-3xl border border-stone-200/80 mb-16">
+          <div className="max-w-3xl mx-auto text-center mb-12">
+            <span className="text-xs font-bold uppercase tracking-wider text-amber-700">
+              Audit-Governed Pipeline
+            </span>
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-[#3A1700] mt-2">
+              How The Approval Lifecycle Operates
+            </h2>
+            <p className="text-stone-600 text-sm mt-2">
+              A transparent, rule-driven credit workflow from borrower submission to final schedule disbursal.
+            </p>
+          </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {LOAN_TYPES.map((loan) => (
-            <div
-              key={loan.id}
-              className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col justify-between group hover:-translate-y-1"
-            >
-              <div>
-                <div className="flex justify-between items-start mb-4">
-                  <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 group-hover:bg-blue-50 group-hover:text-blue-700 transition">
-                    {loan.badge}
-                  </span>
-                  <span className="text-lg font-bold text-slate-900">{loan.rate}%</span>
-                </div>
-                <h3 className="text-xl font-bold text-slate-900 mb-2">{loan.name}</h3>
-                <p className="text-xs text-slate-600 leading-relaxed mb-6">{loan.description}</p>
-
-                <div className="space-y-2 py-4 border-t border-slate-100 text-xs text-slate-700">
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">Max Limit:</span>
-                    <span className="font-semibold">₹{(loan.maxAmount / 100000).toFixed(1)} Lakhs</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">Tenure:</span>
-                    <span className="font-semibold">Up to {loan.maxTenure} months</span>
-                  </div>
-                </div>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <div className="bg-[#FFFDF9] p-6 rounded-2xl border border-stone-200/90 shadow-2xs">
+              <div className="w-9 h-9 rounded-full bg-amber-500 text-white font-bold flex items-center justify-center text-sm mb-4 shadow-sm">
+                1
               </div>
+              <h4 className="font-bold text-stone-900 mb-1 text-base">Multi-Step Form</h4>
+              <p className="text-xs text-stone-600 leading-relaxed">
+                Applicants submit personal, loan, and income credentials, attach KYC documents, with full save-as-draft capability.
+              </p>
+            </div>
 
-              <div className="mt-6 pt-4 border-t border-slate-100">
-                <button
-                  onClick={() => {
-                    handleLoanTypeChange(loan)
-                    document.getElementById('calculator')?.scrollIntoView({ behavior: 'smooth' })
-                  }}
-                  className="w-full py-2.5 text-center text-sm font-semibold text-blue-600 bg-blue-50 hover:bg-blue-600 hover:text-white rounded-xl transition cursor-pointer"
-                >
-                  Configure &amp; Apply
-                </button>
+            <div className="bg-[#FFFDF9] p-6 rounded-2xl border border-stone-200/90 shadow-2xs">
+              <div className="w-9 h-9 rounded-full bg-rose-500 text-white font-bold flex items-center justify-center text-sm mb-4 shadow-sm">
+                2
               </div>
+              <h4 className="font-bold text-stone-900 mb-1 text-base">Deterministic Rules</h4>
+              <p className="text-xs text-stone-600 leading-relaxed">
+                Automated policy checks analyze age thresholds, minimum monthly earnings, and Debt-to-Income (DTI) tolerance.
+              </p>
             </div>
-          ))}
-        </div>
-      </section>
 
-      {/* Multi-Stage Credit Workflow Section */}
-      <section id="workflow" className="py-12 px-6 sm:px-12 bg-slate-50 border border-slate-200 rounded-3xl mb-16">
-        <div className="max-w-3xl mx-auto text-center mb-12">
-          <span className="text-xs font-bold uppercase tracking-wider text-blue-600">Enterprise Credit Workflow</span>
-          <h2 className="text-3xl font-bold text-slate-900 mt-2">How Correm LMS Works</h2>
-          <p className="text-slate-600 mt-2">
-            A secure, role-governed journey from application draft to final repayment schedule.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 relative">
-          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm relative">
-            <div className="w-8 h-8 rounded-full bg-blue-600 text-white font-bold flex items-center justify-center text-sm mb-4">
-              1
+            <div className="bg-[#FFFDF9] p-6 rounded-2xl border border-stone-200/90 shadow-2xs">
+              <div className="w-9 h-9 rounded-full bg-orange-500 text-white font-bold flex items-center justify-center text-sm mb-4 shadow-sm">
+                3
+              </div>
+              <h4 className="font-bold text-stone-900 mb-1 text-base">Credit Officer Review</h4>
+              <p className="text-xs text-stone-600 leading-relaxed">
+                Officers review uploaded proofs, request clarifications if needed, and recommend sanction or rejection with audit notes.
+              </p>
             </div>
-            <h4 className="font-bold text-slate-900 mb-1">Multi-Step Form</h4>
-            <p className="text-xs text-slate-600 leading-relaxed">
-              Applicant submits personal, income, loan details and uploads identity &amp; salary proofs. Includes save-as-draft support.
+
+            <div className="bg-[#FFFDF9] p-6 rounded-2xl border border-stone-200/90 shadow-2xs">
+              <div className="w-9 h-9 rounded-full bg-emerald-600 text-white font-bold flex items-center justify-center text-sm mb-4 shadow-sm">
+                4
+              </div>
+              <h4 className="font-bold text-stone-900 mb-1 text-base">Admin Sanction</h4>
+              <p className="text-xs text-stone-600 leading-relaxed">
+                Administrators make the final sanction signoff, auto-generating the complete monthly EMI repayment amortization table.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        {/* Call to Action Footer Card */}
+        <section className="bg-gradient-to-r from-[#2C1810] via-[#3D2015] to-[#25120B] text-white rounded-3xl p-8 sm:p-12 text-center mb-16 relative overflow-hidden shadow-xl">
+          <div className="relative z-10">
+            <h3 className="text-2xl sm:text-4xl font-extrabold mb-4 tracking-tight">
+              Ready to submit or review credit applications?
+            </h3>
+            <p className="text-stone-300 max-w-xl mx-auto mb-8 text-sm sm:text-base leading-relaxed">
+              Sign up today to explore multi-step credit applications, or access your authorized portal as a Loan Officer or Administrator.
             </p>
-          </div>
-
-          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm relative">
-            <div className="w-8 h-8 rounded-full bg-indigo-600 text-white font-bold flex items-center justify-center text-sm mb-4">
-              2
+            <div className="flex flex-wrap justify-center gap-4">
+              <Link
+                to="/applicant/apply"
+                className="px-8 py-3.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 font-bold rounded-xl text-white shadow-lg shadow-orange-500/30 transition transform active:scale-95"
+              >
+                Apply Now
+              </Link>
+              <Link
+                to="/login"
+                className="px-8 py-3.5 bg-white/10 hover:bg-white/15 border border-white/20 font-semibold rounded-xl text-white transition"
+              >
+                Sign In to Account
+              </Link>
             </div>
-            <h4 className="font-bold text-slate-900 mb-1">Eligibility Engine</h4>
-            <p className="text-xs text-slate-600 leading-relaxed">
-              Automated deterministic rules evaluate income-to-loan ratios, minimum age, and document checks with instant pass/fail insights.
-            </p>
           </div>
+        </section>
 
-          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm relative">
-            <div className="w-8 h-8 rounded-full bg-purple-600 text-white font-bold flex items-center justify-center text-sm mb-4">
-              3
-            </div>
-            <h4 className="font-bold text-slate-900 mb-1">Officer Review</h4>
-            <p className="text-xs text-slate-600 leading-relaxed">
-              Loan officer reviews documentation, requests additional information, or recommends approval/rejection with notes.
-            </p>
-          </div>
-
-          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm relative">
-            <div className="w-8 h-8 rounded-full bg-emerald-600 text-white font-bold flex items-center justify-center text-sm mb-4">
-              4
-            </div>
-            <h4 className="font-bold text-slate-900 mb-1">Admin &amp; EMI Schedule</h4>
-            <p className="text-xs text-slate-600 leading-relaxed">
-              Admin gives final sign-off. Approved loans generate full amortization tables (principal, interest, balance, due dates).
-            </p>
-          </div>
-        </div>
-      </section>
-
-      {/* Role-Based Overview Grid */}
-      <section className="py-8 mb-16">
-        <div className="text-center max-w-2xl mx-auto mb-12">
-          <h2 className="text-3xl font-bold tracking-tight text-slate-900">
-            Designed for Every Stakeholder
-          </h2>
-          <p className="text-slate-600 mt-2">
-            Unified access governance across Applicants, Loan Officers, and System Administrators.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          <div className="p-8 rounded-2xl bg-white border border-slate-200 shadow-sm hover:shadow-md transition">
-            <div className="text-blue-600 font-bold text-sm uppercase tracking-wide mb-2">Role 01</div>
-            <h3 className="text-xl font-bold text-slate-900 mb-3">Applicant Portal</h3>
-            <ul className="space-y-2 text-xs text-slate-600">
-              <li className="flex items-center gap-2">&bull; Apply for Personal, Home, Vehicle or Business loans</li>
-              <li className="flex items-center gap-2">&bull; Upload ID proofs and income statements</li>
-              <li className="flex items-center gap-2">&bull; Track real-time timeline (Draft &rarr; Review &rarr; Approved)</li>
-              <li className="flex items-center gap-2">&bull; View full repayment EMI schedule</li>
-            </ul>
-          </div>
-
-          <div className="p-8 rounded-2xl bg-white border border-slate-200 shadow-sm hover:shadow-md transition">
-            <div className="text-indigo-600 font-bold text-sm uppercase tracking-wide mb-2">Role 02</div>
-            <h3 className="text-xl font-bold text-slate-900 mb-3">Loan Officer Desk</h3>
-            <ul className="space-y-2 text-xs text-slate-600">
-              <li className="flex items-center gap-2">&bull; Review incoming queue of loan submissions</li>
-              <li className="flex items-center gap-2">&bull; Inspect applicant documents &amp; verify KYC</li>
-              <li className="flex items-center gap-2">&bull; Trigger rule-based automated eligibility check</li>
-              <li className="flex items-center gap-2">&bull; Request more info or recommend approval</li>
-            </ul>
-          </div>
-
-          <div className="p-8 rounded-2xl bg-white border border-slate-200 shadow-sm hover:shadow-md transition">
-            <div className="text-emerald-600 font-bold text-sm uppercase tracking-wide mb-2">Role 03</div>
-            <h3 className="text-xl font-bold text-slate-900 mb-3">Admin Governance</h3>
-            <ul className="space-y-2 text-xs text-slate-600">
-              <li className="flex items-center gap-2">&bull; Final approve or reject with remarks</li>
-              <li className="flex items-center gap-2">&bull; Complete audit trail of all decision steps</li>
-              <li className="flex items-center gap-2">&bull; Manage users, roles, and system configuration</li>
-              <li className="flex items-center gap-2">&bull; Mark and track individual EMI repayments</li>
-            </ul>
-          </div>
-        </div>
-      </section>
-
-      {/* Call to Action Footer Card */}
-      <section className="bg-slate-900 text-white rounded-3xl p-8 sm:p-12 text-center mb-16 relative overflow-hidden">
-        <h3 className="text-2xl sm:text-4xl font-bold mb-4">Ready to process or apply for credit?</h3>
-        <p className="text-slate-400 max-w-xl mx-auto mb-8 text-sm sm:text-base">
-          Sign up to submit your application or sign in with your role-assigned credentials to access your dashboard.
-        </p>
-        <div className="flex flex-wrap justify-center gap-4">
-          <Link
-            to="/sign-up"
-            className="px-6 py-3 bg-blue-600 hover:bg-blue-500 font-semibold rounded-xl transition shadow-lg"
-          >
-            Get Started Now
-          </Link>
-          <Link
-            to="/login"
-            className="px-6 py-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 font-semibold rounded-xl transition"
-          >
-            Login to Account
-          </Link>
-        </div>
-      </section>
-
-      {/* Footer */}
-      <footer className="pt-8 pb-12 border-t border-slate-200 text-center text-xs text-slate-500">
-        <p>&copy; {new Date().getFullYear()} Correm Advisory India Pvt. Ltd. — Loan Management System (LMS).</p>
-      </footer>
+        {/* Footer */}
+        <footer className="pt-8 pb-12 border-t border-stone-200 text-center text-xs text-stone-500">
+          <p>&copy; {new Date().getFullYear()} Correm Advisory India Pvt. Ltd. — Loan Management System (LMS).</p>
+        </footer>
+      </div>
     </div>
   )
 }

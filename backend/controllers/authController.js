@@ -27,12 +27,14 @@ export const syncUser = async (req, res) => {
       await user.save()
     } else {
       // Create new user profile linked to Clerk
-      const assignedRole = ["applicant", "loan_officer", "admin"].includes(role) ? role : "applicant"
+      const validRole = ["applicant", "loan_officer", "admin"].includes(role)
+      const assignedRole = validRole ? role : "applicant"
       user = new User({
         clerkId: targetClerkId,
         email: email.toLowerCase().trim(),
         name: name ? name.trim() : email.split("@")[0],
         role: assignedRole,
+        roleSelected: validRole ? true : false,
         imageUrl: imageUrl || "",
         phone: phone ? phone.trim() : ""
       })
@@ -90,7 +92,65 @@ export const updateProfile = async (req, res) => {
   }
 }
 
-// 4. Handle Clerk Webhook Events (user.created, user.updated, user.deleted)
+// 4. Select Role (One-time, permanent role selection after signup)
+export const selectRole = async (req, res) => {
+  try {
+    const { role, adminToken } = req.body
+    let user = req.user
+
+    // If req.user is not yet populated by Clerk auth, find by req.auth.userId or clerkId from body
+    if (!user && (req.auth?.userId || req.body.clerkId)) {
+      const clerkId = req.auth?.userId || req.body.clerkId
+      user = await User.findOne({ clerkId })
+    }
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found. Please sync user first." })
+    }
+
+    // Role immutability check
+    if (user.roleSelected) {
+      return res.status(400).json({
+        success: false,
+        message: "Your role is already permanently locked and cannot be changed.",
+        user
+      })
+    }
+
+    if (!["applicant", "loan_officer", "admin"].includes(role)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid role selected. Must be 'applicant', 'loan_officer', or 'admin'."
+      })
+    }
+
+    // If attempting to claim 'admin' role, verify secret admin token
+    if (role === "admin") {
+      const expectedToken = process.env.ADMIN_TOKEN || "12345"
+      if (!adminToken || String(adminToken).trim() !== String(expectedToken).trim()) {
+        return res.status(403).json({
+          success: false,
+          message: "Invalid Admin Passkey / Token. Verification failed."
+        })
+      }
+    }
+
+    user.role = role
+    user.roleSelected = true
+    await user.save()
+
+    return res.status(200).json({
+      success: true,
+      message: `Role permanently set to ${role}.`,
+      user
+    })
+  } catch (error) {
+    console.error("Select role error:", error)
+    return res.status(500).json({ success: false, message: error.message || "Failed to set role" })
+  }
+}
+
+// 5. Handle Clerk Webhook Events (user.created, user.updated, user.deleted)
 export const handleClerkWebhook = async (req, res) => {
   try {
     const { type, data } = req.body

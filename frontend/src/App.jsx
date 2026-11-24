@@ -1,108 +1,168 @@
+import { useState } from 'react'
 import { Routes, Route, Link, useLocation } from 'react-router-dom'
 import { Show, UserButton } from '@clerk/react'
 import SignInPage from './Pages/auth/SignInPage'
 import SignUpPage from './Pages/auth/SignUpPage'
 import LoginPage from './Pages/auth/LoginPage'
+import RoleSelectionPage from './Pages/auth/RoleSelectionPage'
 import HomePage from './Pages/homePage'
 import OfficerPage from './Pages/officer/OfficerPage'
 import AdminPage from './Pages/admin/AdminPage'
 import ApplicantDashboard from './Pages/applicant/ApplicantDashboard'
 import ApplyLoanPage from './Pages/applicant/ApplyLoanPage'
+import UserSync from './components/UserSync'
 
 function App() {
   const location = useLocation()
+  const [currentUser, setCurrentUser] = useState(() => {
+    try {
+      const storedRole = sessionStorage.getItem('lms_user_role')
+      const roleSelected = sessionStorage.getItem('lms_role_selected') === 'true'
+      if (storedRole && roleSelected) {
+        return { role: storedRole, roleSelected: true }
+      }
+    } catch (e) {}
+    return null
+  })
+
+  const handleUserSynced = (user) => {
+    setCurrentUser(user)
+  }
+
+  const roleBadge = () => {
+    if (!currentUser || !currentUser.roleSelected) return null
+    const map = {
+      applicant: { label: 'Applicant', color: 'bg-indigo-100 text-indigo-700 border-indigo-200' },
+      loan_officer: { label: 'Loan Officer', color: 'bg-blue-100 text-blue-700 border-blue-200' },
+      admin: { label: 'Admin', color: 'bg-emerald-100 text-emerald-700 border-emerald-200' }
+    }
+    const meta = map[currentUser.role] || { label: currentUser.role, color: 'bg-slate-100 text-slate-700 border-slate-200' }
+    return (
+      <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full border ${meta.color} tracking-wider`}>
+        {meta.label}
+      </span>
+    )
+  }
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans">
-      {/* Top Navigation Bar */}
-      <header className="sticky top-0 z-50 bg-white/95 backdrop-blur border-b border-slate-200">
-        <nav className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex justify-between items-center">
-          <Link to="/" className="flex items-center gap-2.5 group">
-            <div className="w-9 h-9 rounded-xl bg-blue-600 text-white font-extrabold flex items-center justify-center text-lg shadow-md shadow-blue-500/20 group-hover:bg-blue-700 transition">
-              L
+    <div className="min-h-screen bg-[#FFFDF9] text-stone-900 flex flex-col font-sans selection:bg-amber-100 selection:text-amber-900">
+      {/* Background Clerk User to MongoDB synchronizer & Role Checker */}
+      <UserSync onUserSynced={handleUserSynced} />
+
+      {/* Top Navigation Bar matching the image */}
+      <header className="sticky top-0 z-50 bg-[#FFFDF9]/80 backdrop-blur-md border-b border-stone-200/60">
+        <nav className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-18 flex justify-between items-center">
+          {/* Logo with rounded icon container */}
+          <Link to="/" className="flex items-center gap-3 group">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-600 via-rose-500 to-indigo-600 p-[2px] shadow-sm">
+              <div className="w-full h-full bg-[#1A1A2E] rounded-[10px] flex items-center justify-center text-white text-base font-black">
+                ✦
+              </div>
             </div>
             <div className="flex flex-col">
-              <span className="text-base font-bold text-slate-900 leading-tight">
-                Correm LMS
-              </span>
-              <span className="text-[10px] uppercase tracking-wider font-semibold text-slate-400">
-                Loan Management
+              <span className="text-xl font-extrabold tracking-tight text-[#2B1B17] font-serif uppercase">
+                CORREM
               </span>
             </div>
           </Link>
 
-          {/* Center Navigation Links */}
-          <div className="hidden md:flex items-center gap-6 text-sm font-medium text-slate-600">
+          {/* Center Navigation Links (Role-specific direct routing) */}
+          <div className="hidden md:flex items-center gap-7 text-sm font-medium text-stone-600">
             <Link
               to="/"
-              className={`hover:text-blue-600 transition ${location.pathname === '/' ? 'text-blue-600 font-semibold' : ''}`}
+              className={`hover:text-amber-700 transition ${location.pathname === '/' ? 'text-amber-700 font-bold' : ''}`}
             >
               Home
             </Link>
-            <Link
-              to="/applicant"
-              className={`hover:text-blue-600 transition flex items-center gap-1.5 ${
-                location.pathname.startsWith('/applicant') ? 'text-blue-600 font-semibold' : ''
-              }`}
-            >
-              <span className="w-1.5 h-1.5 rounded-full bg-indigo-500"></span>
-              Applicant Desk
-            </Link>
-            <Link
-              to="/officer"
-              className={`hover:text-blue-600 transition flex items-center gap-1.5 ${
-                location.pathname.startsWith('/officer') ? 'text-blue-600 font-semibold' : ''
-              }`}
-            >
-              <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
-              Officer Review
-            </Link>
-            <Link
-              to="/admin"
-              className={`hover:text-blue-600 transition flex items-center gap-1.5 ${
-                location.pathname.startsWith('/admin') ? 'text-blue-600 font-semibold' : ''
-              }`}
-            >
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-              Admin Portal
-            </Link>
-            <a href="/#calculator" className="hover:text-blue-600 transition">
+
+            {/* Direct route for Applicant */}
+            {currentUser?.role === 'applicant' && (
+              <>
+                <Link
+                  to="/applicant"
+                  className={`hover:text-amber-700 transition flex items-center gap-1.5 ${
+                    location.pathname === '/applicant' ? 'text-amber-700 font-bold' : ''
+                  }`}
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                  My Applications
+                </Link>
+                <Link
+                  to="/applicant/apply"
+                  className={`hover:text-amber-700 transition flex items-center gap-1.5 ${
+                    location.pathname === '/applicant/apply' ? 'text-amber-700 font-bold' : ''
+                  }`}
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
+                  Apply Loan
+                </Link>
+              </>
+            )}
+
+            {/* Direct route for Loan Officer */}
+            {currentUser?.role === 'loan_officer' && (
+              <Link
+                to="/officer"
+                className={`hover:text-amber-700 transition flex items-center gap-1.5 ${
+                  location.pathname.startsWith('/officer') ? 'text-amber-700 font-bold' : ''
+                }`}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+                Officer Queue
+              </Link>
+            )}
+
+            {/* Direct route for Administrator */}
+            {currentUser?.role === 'admin' && (
+              <Link
+                to="/admin"
+                className={`hover:text-amber-700 transition flex items-center gap-1.5 ${
+                  location.pathname.startsWith('/admin') ? 'text-amber-700 font-bold' : ''
+                }`}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                Admin Desk
+              </Link>
+            )}
+
+            {/* If user is signed in but hasn't selected a role yet */}
+            {currentUser && !currentUser.roleSelected && (
+              <Link
+                to="/select-role"
+                className={`hover:text-amber-700 transition flex items-center gap-1.5 ${
+                  location.pathname === '/select-role' ? 'text-amber-600 font-bold' : 'text-amber-700'
+                }`}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                Select Role
+              </Link>
+            )}
+
+            <a href="/#calculator" className="hover:text-amber-700 transition">
               EMI Calculator
             </a>
           </div>
 
-          {/* Auth Controls */}
+          {/* Auth Controls matching the design image */}
           <div className="flex items-center gap-3">
-            <Link
-              to="/applicant/apply"
-              className="hidden sm:inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg transition"
-            >
-              Apply Loan
-            </Link>
-
             <Show when="signed-out">
               <Link
                 to="/sign-in"
-                className="px-3.5 py-1.5 text-sm font-medium text-slate-700 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition"
+                className="px-5 py-2 text-sm font-semibold text-stone-700 bg-white/70 hover:bg-white border border-stone-200/80 rounded-full transition shadow-xs"
               >
                 Sign In
               </Link>
               <Link
-                to="/login"
-                className="hidden sm:inline-block px-3.5 py-1.5 text-sm font-medium text-slate-700 border border-slate-300 hover:bg-slate-100 rounded-lg transition"
-              >
-                Login
-              </Link>
-              <Link
                 to="/sign-up"
-                className="px-4 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-500 rounded-lg shadow-sm transition"
+                className="px-6 py-2 text-sm font-bold text-white bg-gradient-to-r from-amber-500 via-amber-600 to-orange-500 hover:from-amber-600 hover:to-orange-600 rounded-full shadow-md shadow-orange-500/25 transition active:scale-95"
               >
-                Sign Up
+                Get Started
               </Link>
             </Show>
+
             <Show when="signed-in">
               <div className="flex items-center gap-3">
-                <span className="text-xs text-slate-500 font-medium hidden sm:inline">My Account</span>
+                {roleBadge()}
                 <UserButton afterSignOutUrl="/" />
               </div>
             </Show>
@@ -111,16 +171,17 @@ function App() {
       </header>
 
       {/* Main Page Content */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="flex-1 w-full">
         <Routes>
           <Route path="/" element={<HomePage />} />
-          <Route path="/applicant" element={<ApplicantDashboard />} />
-          <Route path="/applicant/apply" element={<ApplyLoanPage />} />
-          <Route path="/officer/*" element={<OfficerPage />} />
-          <Route path="/admin/*" element={<AdminPage />} />
-          <Route path="/sign-in/*" element={<SignInPage />} />
-          <Route path="/sign-up/*" element={<SignUpPage />} />
-          <Route path="/login/*" element={<LoginPage />} />
+          <Route path="/select-role" element={<RoleSelectionPage onRoleSelected={handleUserSynced} />} />
+          <Route path="/applicant" element={<div className="max-w-7xl mx-auto px-4 py-8"><ApplicantDashboard /></div>} />
+          <Route path="/applicant/apply" element={<div className="max-w-7xl mx-auto px-4 py-8"><ApplyLoanPage /></div>} />
+          <Route path="/officer/*" element={<div className="max-w-7xl mx-auto px-4 py-8"><OfficerPage /></div>} />
+          <Route path="/admin/*" element={<div className="max-w-7xl mx-auto px-4 py-8"><AdminPage /></div>} />
+          <Route path="/sign-in/*" element={<div className="max-w-7xl mx-auto px-4 py-8"><SignInPage /></div>} />
+          <Route path="/sign-up/*" element={<div className="max-w-7xl mx-auto px-4 py-8"><SignUpPage /></div>} />
+          <Route path="/login/*" element={<div className="max-w-7xl mx-auto px-4 py-8"><LoginPage /></div>} />
         </Routes>
       </main>
     </div>

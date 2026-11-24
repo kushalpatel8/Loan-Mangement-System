@@ -30,6 +30,10 @@ const userSchema = new mongoose.Schema(
       },
       default: "applicant"
     },
+    roleSelected: {
+      type: Boolean,
+      default: false
+    },
     phone: {
       type: String,
       trim: true,

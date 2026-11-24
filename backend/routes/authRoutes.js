@@ -1,5 +1,5 @@
 import { Router } from "express"
-import { syncUser, getMe, updateProfile, handleClerkWebhook } from "../controllers/authController.js"
+import { syncUser, getMe, updateProfile, selectRole, handleClerkWebhook } from "../controllers/authController.js"
 import { requireClerkAuth } from "../middleware/authMiddleware.js"
 import { authLimiter } from "../middleware/rateLimitMiddleware.js"
 
@@ -11,6 +11,7 @@ router.post("/webhook", handleClerkWebhook)
 
 // Protected user routes
 router.get("/me", requireClerkAuth, getMe)
+router.post("/select-role", requireClerkAuth, selectRole)
 router.put("/profile", requireClerkAuth, updateProfile)
 
 export default router
