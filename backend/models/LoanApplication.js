@@ -23,6 +23,14 @@ const documentSchema = new mongoose.Schema(
       type: String,
       default: ""
     },
+    publicId: {
+      type: String,
+      default: null
+    },
+    localUrl: {
+      type: String,
+      default: ""
+    },
     uploadedAt: {
       type: Date,
       default: Date.now
@@ -272,6 +280,24 @@ const loanApplicationSchema = new mongoose.Schema(
         type: String,
         default: ""
       }
+    },
+
+    // Applicant's Reconsideration Request (Appeal when application was rejected)
+    reconsiderationRequest: {
+      appealStatement: {
+        type: String,
+        default: ""
+      },
+      requestedAt: {
+        type: Date
+      },
+      adjustedAmount: {
+        type: Number
+      },
+      adjustedTenure: {
+        type: Number
+      },
+      additionalDocuments: [documentSchema]
     }
   },
   {

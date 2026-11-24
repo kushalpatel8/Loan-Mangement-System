@@ -15,14 +15,23 @@ import {
   Upload,
   Calendar,
   CreditCard,
-  FileCheck
+  FileCheck,
+  Download,
+  Printer,
+  RotateCcw,
+  Trash2,
+  Paperclip
 } from 'lucide-react'
 import {
   getApplications,
   getRepaymentSchedule,
   respondToMoreInfo,
-  clearDummyData
+  requestReconsideration,
+  clearDummyData,
+  uploadDocumentFile
 } from '../../lib/loanWorkflowApi'
+import LoanSummaryModal from '../../components/LoanSummaryModal'
+import { exportLoanSummaryCSV, exportLoanSummaryPDF } from '../../utils/loanExportUtils'
 
 export default function ApplicantDashboard() {
   const { user, isLoaded } = useUser()
@@ -36,11 +45,28 @@ export default function ApplicantDashboard() {
   const [moreInfoApp, setMoreInfoApp] = useState(null)
   const [responseText, setResponseText] = useState('')
   const [newDocName, setNewDocName] = useState('Updated_Salary_Slip_Nov2026.pdf')
+  const [uploadedDoc, setUploadedDoc] = useState(null)
+  const [uploadingDoc, setUploadingDoc] = useState(false)
+  const [reuploadDocType, setReuploadDocType] = useState('id_proof')
   const [submittingResponse, setSubmittingResponse] = useState(false)
 
   // Viewing Repayment Schedule
   const [activeScheduleApp, setActiveScheduleApp] = useState(null)
   const [scheduleData, setScheduleData] = useState(null)
+
+  // Viewing & Exporting Full Loan Summary Statement
+  const [summaryModalApp, setSummaryModalApp] = useState(null)
+
+  // Requesting Reconsideration / Appeal for Rejected Application
+  const [reconsiderationApp, setReconsiderationApp] = useState(null)
+  const [appealStatement, setAppealStatement] = useState('')
+  const [appealAmount, setAppealAmount] = useState('')
+  const [appealTenure, setAppealTenure] = useState('24')
+  const [appealDocName, setAppealDocName] = useState('Updated_Income_ITR_Proof.pdf')
+  const [appealUploadedDoc, setAppealUploadedDoc] = useState(null)
+  const [appealUploadingDoc, setAppealUploadingDoc] = useState(false)
+  const [appealDocType, setAppealDocType] = useState('income_proof')
+  const [submittingAppeal, setSubmittingAppeal] = useState(false)
 
   const loadData = async () => {
     setLoading(true)
@@ -98,6 +124,49 @@ export default function ApplicantDashboard() {
     }
   }
 
+  // Open Respond to Officer Modal & Auto-detect Requested Document Type
+  const handleOpenMoreInfo = (app) => {
+    setMoreInfoApp(app)
+    setResponseText('')
+    setUploadedDoc(null)
+    const req = (app?.officerReview?.infoRequested || '').toLowerCase()
+    if (req.includes('pan') || req.includes('aadhaar') || req.includes('id') || req.includes('identity') || req.includes('passport')) {
+      setReuploadDocType('id_proof')
+    } else if (req.includes('salary') || req.includes('income') || req.includes('slip') || req.includes('itr') || req.includes('form 16')) {
+      setReuploadDocType('income_proof')
+    } else if (req.includes('bank') || req.includes('statement')) {
+      setReuploadDocType('bank_statement')
+    } else if (req.includes('address') || req.includes('utility') || req.includes('bill') || req.includes('rent')) {
+      setReuploadDocType('address_proof')
+    } else {
+      setReuploadDocType('id_proof')
+    }
+  }
+
+  // Handle Real File Selection & Upload for More Info
+  const handleFileSelect = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploadingDoc(true)
+    try {
+      const doc = await uploadDocumentFile(file, reuploadDocType)
+      setUploadedDoc(doc)
+    } catch (err) {
+      console.warn('File upload fallback:', err)
+      setUploadedDoc({
+        _id: `doc_${Date.now()}`,
+        documentType: reuploadDocType,
+        fileName: file.name,
+        fileSize: file.size,
+        fileUrl: URL.createObjectURL(file),
+        uploadedAt: new Date().toISOString()
+      })
+    } finally {
+      setUploadingDoc(false)
+      e.target.value = ''
+    }
+  }
+
   // Handle Submit Response to Officer
   const handleSendResponse = async (e) => {
     e.preventDefault()
@@ -107,15 +176,77 @@ export default function ApplicantDashboard() {
     try {
       await respondToMoreInfo(moreInfoApp._id, {
         responseText,
-        newDocumentName: newDocName
+        document: uploadedDoc,
+        newDocumentName: uploadedDoc?.fileName || newDocName
       })
       setMoreInfoApp(null)
       setResponseText('')
+      setUploadedDoc(null)
       await loadData()
     } catch (err) {
       alert(err.message || 'Failed to submit response')
     } finally {
       setSubmittingResponse(false)
+    }
+  }
+
+  // Handle Open Reconsideration Modal
+  const handleOpenReconsideration = (app) => {
+    setReconsiderationApp(app)
+    setAppealStatement('')
+    setAppealAmount(String(app.loanDetails?.amount || 250000))
+    setAppealTenure(String(app.loanDetails?.tenureMonths || 24))
+    setAppealDocType('income_proof')
+    setAppealUploadedDoc(null)
+    setAppealDocName('Updated_Income_ITR_Proof.pdf')
+  }
+
+  // Handle Real File Selection for Appeal / Reconsideration
+  const handleAppealFileSelect = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setAppealUploadingDoc(true)
+    try {
+      const doc = await uploadDocumentFile(file, appealDocType)
+      setAppealUploadedDoc(doc)
+    } catch (err) {
+      console.warn('Appeal file upload fallback:', err)
+      setAppealUploadedDoc({
+        _id: `doc_${Date.now()}`,
+        documentType: appealDocType,
+        fileName: file.name,
+        fileSize: file.size,
+        fileUrl: URL.createObjectURL(file),
+        uploadedAt: new Date().toISOString()
+      })
+    } finally {
+      setAppealUploadingDoc(false)
+      e.target.value = ''
+    }
+  }
+
+  // Handle Submit Reconsideration Appeal
+  const handleSendReconsideration = async (e) => {
+    e.preventDefault()
+    if (!reconsiderationApp) return
+
+    setSubmittingAppeal(true)
+    try {
+      await requestReconsideration(reconsiderationApp._id, {
+        appealStatement,
+        adjustedAmount: appealAmount ? Number(appealAmount) : undefined,
+        adjustedTenure: appealTenure ? Number(appealTenure) : undefined,
+        document: appealUploadedDoc,
+        newDocumentName: appealUploadedDoc?.fileName || appealDocName
+      })
+      setReconsiderationApp(null)
+      setAppealStatement('')
+      setAppealUploadedDoc(null)
+      await loadData()
+    } catch (err) {
+      alert(err.message || 'Failed to submit reconsideration appeal')
+    } finally {
+      setSubmittingAppeal(false)
     }
   }
 
@@ -263,7 +394,15 @@ export default function ApplicantDashboard() {
                   </div>
 
                   {/* Top Actions */}
-                  <div className="flex items-center gap-2 self-start sm:self-auto">
+                  <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
+                    <button
+                      onClick={() => setSummaryModalApp(app)}
+                      className="px-3.5 py-2 bg-[#F8F5EE] hover:bg-[#F0ECE2] text-stone-800 border border-stone-200/90 text-xs font-bold rounded-xl transition flex items-center gap-1.5 shadow-2xs cursor-pointer active:scale-95"
+                      title="View & Export Full Loan Summary Statement (CSV / PDF)"
+                    >
+                      <FileText className="w-3.5 h-3.5 text-amber-700" />
+                      Export Summary
+                    </button>
                     {app.status === 'draft' ? (
                       <Link
                         to={`/applicant/apply?resume=${app._id}`}
@@ -274,10 +413,18 @@ export default function ApplicantDashboard() {
                     ) : app.status === 'approved' ? (
                       <button
                         onClick={() => handleOpenSchedule(app)}
-                        className="px-4 py-2 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 text-xs font-bold rounded-xl transition flex items-center gap-1.5 border border-emerald-300 shadow-2xs"
+                        className="px-4 py-2 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 text-xs font-bold rounded-xl transition flex items-center gap-1.5 border border-emerald-300 shadow-2xs cursor-pointer"
                       >
                         <CreditCard className="w-3.5 h-3.5 text-emerald-700" />
                         Repayment Schedule
+                      </button>
+                    ) : app.status === 'rejected' ? (
+                      <button
+                        onClick={() => handleOpenReconsideration(app)}
+                        className="px-3.5 py-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white text-xs font-bold rounded-xl transition flex items-center gap-1.5 shadow-md shadow-orange-500/25 cursor-pointer active:scale-95"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                        Request Again
                       </button>
                     ) : null}
                   </div>
@@ -347,6 +494,48 @@ export default function ApplicantDashboard() {
                   </div>
                 </div>
 
+                {/* APPLICATION REJECTED ALERT ACTION CARD */}
+                {app.status === 'rejected' && (
+                  <div className="p-5 rounded-2xl bg-rose-50/70 border-2 border-rose-200 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-xs font-bold text-rose-900 uppercase tracking-wide">
+                        <XCircle className="w-4 h-4 text-rose-600" />
+                        Application Rejected &bull; Reconsideration &amp; Re-Apply Options
+                      </div>
+                      <span className="text-[10px] text-rose-800 font-semibold bg-rose-100 px-2.5 py-0.5 rounded-full">
+                        Action Available
+                      </span>
+                    </div>
+
+                    {(app.adminDecision?.remarks || app.officerReview?.remarks) && (
+                      <div className="p-3 bg-white/90 rounded-xl border border-rose-200 text-xs text-rose-950 font-medium space-y-1">
+                        <span className="text-[10px] font-bold text-rose-700 uppercase block">Underwriting Decision Remarks:</span>
+                        <p className="italic">&quot;{app.adminDecision?.remarks || app.officerReview?.remarks}&quot;</p>
+                      </div>
+                    )}
+
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pt-1">
+                      <span className="text-[11px] text-rose-800 leading-relaxed max-w-lg">
+                        Circumstances changed or need to adjust your terms? You can submit an appeal with updated documentation, or start a fresh application.
+                      </span>
+                      <div className="flex items-center gap-2 w-full sm:w-auto">
+                        <button
+                          onClick={() => handleOpenReconsideration(app)}
+                          className="px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white text-xs font-bold rounded-xl transition flex items-center gap-1.5 shadow-md shadow-orange-500/25 cursor-pointer active:scale-95"
+                        >
+                          <RotateCcw className="w-3.5 h-3.5" /> Request Again / Appeal
+                        </button>
+                        <Link
+                          to={`/applicant/apply?reapplyFrom=${app._id}`}
+                          className="px-4 py-2 bg-white hover:bg-stone-50 text-stone-800 border border-stone-300 text-xs font-bold rounded-xl transition flex items-center gap-1.5 cursor-pointer active:scale-95"
+                        >
+                          <PlusCircle className="w-3.5 h-3.5 text-stone-600" /> Re-Apply Fresh
+                        </Link>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* MORE INFO NEEDED ALERT ACTION CARD */}
                 {app.status === 'more_info_needed' && app.officerReview?.infoRequested && (
                   <div className="p-5 rounded-2xl bg-amber-50/80 border-2 border-amber-300 space-y-3">
@@ -369,7 +558,7 @@ export default function ApplicantDashboard() {
                         Please provide clarification or attach requested documentation to continue underwriting.
                       </span>
                       <button
-                        onClick={() => setMoreInfoApp(app)}
+                        onClick={() => handleOpenMoreInfo(app)}
                         className="px-5 py-2.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white text-xs font-bold rounded-xl transition flex items-center gap-1.5 shadow-md shadow-orange-500/25 cursor-pointer"
                       >
                         <Send className="w-3.5 h-3.5" /> Respond &amp; Re-Upload
@@ -418,17 +607,102 @@ export default function ApplicantDashboard() {
                 />
               </div>
 
-              <div className="space-y-1">
-                <label className="font-bold text-stone-700 block">Re-Upload Document (PDF / Image)</label>
-                <div className="p-3 bg-stone-50 border border-stone-200 rounded-xl flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <FileCheck className="w-4 h-4 text-emerald-600" />
-                    <span className="font-semibold text-stone-800">{newDocName}</span>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="font-bold text-[#3A1700] text-xs">
+                    Re-Upload Document / Proof (PDF, PNG, JPG) *
+                  </label>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[11px] text-stone-500 font-semibold">Doc Type:</span>
+                    <select
+                      value={reuploadDocType}
+                      onChange={(e) => {
+                        setReuploadDocType(e.target.value)
+                        if (uploadedDoc) {
+                          setUploadedDoc({ ...uploadedDoc, documentType: e.target.value })
+                        }
+                      }}
+                      className="text-[11px] font-semibold bg-[#F8F5EE] border border-stone-300 rounded-lg px-2 py-1 text-[#3A1700] focus:ring-1 focus:ring-amber-500"
+                    >
+                      <option value="id_proof">ID Proof (PAN / Aadhaar / Passport)</option>
+                      <option value="income_proof">Income Proof (Salary Slip / ITR)</option>
+                      <option value="bank_statement">Bank Statement (Last 6 Months)</option>
+                      <option value="address_proof">Address Proof (Utility Bill / Rent)</option>
+                      <option value="other">Other Supporting Document</option>
+                    </select>
                   </div>
-                  <span className="text-[10px] text-amber-800 font-bold bg-amber-100 px-2 py-0.5 rounded-full">
-                    Attached
-                  </span>
                 </div>
+
+                {uploadedDoc ? (
+                  <div className="p-3.5 bg-emerald-50/80 border border-emerald-300 rounded-2xl flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-10 h-10 rounded-xl bg-emerald-100 border border-emerald-300 flex items-center justify-center shrink-0 text-emerald-700">
+                        <FileCheck className="w-5 h-5" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-stone-900 truncate block text-xs">
+                            {uploadedDoc.fileName}
+                          </span>
+                          <span className="text-[10px] bg-emerald-600 text-white font-bold px-2 py-0.5 rounded-full uppercase tracking-wider shrink-0">
+                            Ready to Send
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-stone-500 mt-0.5 flex items-center gap-2">
+                          <span className="capitalize">{uploadedDoc.documentType?.replace('_', ' ') || 'Document'}</span>
+                          {uploadedDoc.fileSize && (
+                            <span>• {(uploadedDoc.fileSize / 1024).toFixed(1)} KB</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <label className="px-3 py-1.5 bg-white hover:bg-stone-50 border border-stone-200 rounded-lg text-[11px] font-semibold text-stone-700 cursor-pointer transition shadow-xs">
+                        Change File
+                        <input
+                          type="file"
+                          accept=".pdf,.png,.jpg,.jpeg,.webp"
+                          onChange={handleFileSelect}
+                          className="hidden"
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setUploadedDoc(null)}
+                        className="p-1.5 hover:bg-rose-100 text-stone-400 hover:text-rose-600 rounded-lg transition cursor-pointer"
+                        title="Remove selected file"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <label className="flex flex-col items-center justify-center p-5 border-2 border-dashed border-amber-300 hover:border-amber-500 bg-amber-50/50 hover:bg-amber-50/90 rounded-2xl cursor-pointer transition text-center group">
+                      <div className="w-11 h-11 rounded-2xl bg-white shadow-xs border border-amber-200 flex items-center justify-center text-amber-700 group-hover:scale-105 transition mb-2">
+                        {uploadingDoc ? (
+                          <RefreshCw className="w-5 h-5 animate-spin text-amber-600" />
+                        ) : (
+                          <Upload className="w-5 h-5" />
+                        )}
+                      </div>
+                      <span className="font-bold text-[#3A1700] text-xs">
+                        {uploadingDoc ? 'Uploading document...' : 'Click to Browse & Choose File'}
+                      </span>
+                      <span className="text-[11px] text-stone-500 mt-0.5">
+                        Choose your PAN Card, Salary Slip, or Bank Statement (PDF, JPG, PNG up to 10MB)
+                      </span>
+                      <input
+                        type="file"
+                        accept=".pdf,.png,.jpg,.jpeg,.webp"
+                        onChange={handleFileSelect}
+                        disabled={uploadingDoc}
+                        className="hidden"
+                      />
+                    </label>
+                  </div>
+                )}
               </div>
 
               <div className="flex justify-end gap-2.5 pt-3 border-t border-stone-100">
@@ -452,22 +726,253 @@ export default function ApplicantDashboard() {
         </div>
       )}
 
+      {/* Reconsideration / Appeal Modal for Rejected Application */}
+      {reconsiderationApp && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-stone-900/60 backdrop-blur-sm flex justify-center items-center p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-xl overflow-hidden border border-stone-200 animate-in fade-in zoom-in-95 duration-150">
+            <div className="p-6 bg-gradient-to-br from-[#2E1810] to-[#1E0F0A] text-white flex justify-between items-center">
+              <div>
+                <span className="text-xs uppercase font-bold text-amber-300">Request Reconsideration / Appeal Decision</span>
+                <h3 className="text-lg font-bold">{reconsiderationApp.applicationNumber}</h3>
+                <p className="text-xs text-stone-300 mt-0.5">
+                  Original Request: ₹{Number(reconsiderationApp.loanDetails?.amount || 0).toLocaleString('en-IN')} for {reconsiderationApp.loanDetails?.tenureMonths} mos
+                </p>
+              </div>
+              <button
+                onClick={() => setReconsiderationApp(null)}
+                className="p-1.5 text-stone-300 hover:text-white text-xl cursor-pointer"
+              >
+                &times;
+              </button>
+            </div>
+
+            <form onSubmit={handleSendReconsideration} className="p-6 space-y-4 text-xs">
+              {/* Previous Rejection Remarks */}
+              {(reconsiderationApp.adminDecision?.remarks || reconsiderationApp.officerReview?.remarks) && (
+                <div className="p-3 bg-rose-50 rounded-xl border border-rose-200 text-rose-900 space-y-1">
+                  <span className="font-bold block text-[11px] text-rose-800 uppercase">Bank Rejection Reason:</span>
+                  <p className="italic text-xs">&quot;{reconsiderationApp.adminDecision?.remarks || reconsiderationApp.officerReview?.remarks}&quot;</p>
+                </div>
+              )}
+
+              {/* Appeal Statement */}
+              <div className="space-y-1">
+                <label className="font-bold text-[#3A1700] block">
+                  Appeal Explanation &amp; Updated Circumstances *
+                </label>
+                <textarea
+                  rows={3}
+                  required
+                  placeholder="e.g. I have paid off my previous existing personal loan of ₹8,000/mo, which reduces my DTI to 28%. I have also lowered my requested principal to ₹2,50,000 to meet policy guidelines..."
+                  value={appealStatement}
+                  onChange={(e) => setAppealStatement(e.target.value)}
+                  className="w-full p-3 bg-stone-50 border border-stone-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 text-stone-800"
+                />
+              </div>
+
+              {/* Term Adjustment Options */}
+              <div className="p-4 rounded-2xl bg-[#F8F5EE] border border-stone-200 space-y-3">
+                <span className="text-xs font-bold text-[#3A1700] uppercase tracking-wide block">
+                  Adjust Loan Terms (Recommended to Increase Approval Chances)
+                </span>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[11px] text-stone-600 font-semibold block mb-1">Adjusted Principal (₹)</label>
+                    <input
+                      type="number"
+                      min="25000"
+                      step="5000"
+                      value={appealAmount}
+                      onChange={(e) => setAppealAmount(e.target.value)}
+                      className="w-full p-2.5 bg-white border border-stone-300 rounded-xl font-bold text-[#3A1700] focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] text-stone-600 font-semibold block mb-1">Adjusted Tenure (Months)</label>
+                    <select
+                      value={appealTenure}
+                      onChange={(e) => setAppealTenure(e.target.value)}
+                      className="w-full p-2.5 bg-white border border-stone-300 rounded-xl font-bold text-[#3A1700] focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
+                    >
+                      <option value="12">12 Months (1 Year)</option>
+                      <option value="24">24 Months (2 Years)</option>
+                      <option value="36">36 Months (3 Years)</option>
+                      <option value="36">36 Months (3 Years)</option>
+                      <option value="48">48 Months (4 Years)</option>
+                      <option value="60">60 Months (5 Years)</option>
+                      <option value="84">84 Months (7 Years)</option>
+                    </select>
+                  </div>
+                </div>
+
+                {appealAmount && appealTenure && (
+                  <div className="flex justify-between items-center pt-2 border-t border-stone-200/80 text-[11px]">
+                    <span className="text-stone-500">New Estimated Monthly EMI:</span>
+                    <span className="font-extrabold text-amber-700 text-sm">
+                      ₹{Math.round(
+                        (Number(appealAmount) *
+                          ((Number(reconsiderationApp.loanDetails?.interestRate || 12) / 12) / 100) *
+                          Math.pow(1 + ((Number(reconsiderationApp.loanDetails?.interestRate || 12) / 12) / 100), Number(appealTenure))) /
+                          (Math.pow(1 + ((Number(reconsiderationApp.loanDetails?.interestRate || 12) / 12) / 100), Number(appealTenure)) - 1)
+                      ).toLocaleString('en-IN')}/mo
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Attach Fresh Supporting Document */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="font-bold text-stone-700 block text-xs">
+                    Attach Fresh Supporting Proof (PDF / Image)
+                  </label>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[11px] text-stone-500 font-semibold">Proof Type:</span>
+                    <select
+                      value={appealDocType}
+                      onChange={(e) => {
+                        setAppealDocType(e.target.value)
+                        if (appealUploadedDoc) {
+                          setAppealUploadedDoc({ ...appealUploadedDoc, documentType: e.target.value })
+                        }
+                      }}
+                      className="text-[11px] font-semibold bg-[#F8F5EE] border border-stone-300 rounded-lg px-2 py-1 text-[#3A1700] focus:ring-1 focus:ring-amber-500"
+                    >
+                      <option value="income_proof">Income Proof (ITR / Form 16 / Salary)</option>
+                      <option value="bank_statement">Bank Statement (Recent 6 Months)</option>
+                      <option value="id_proof">ID Proof / Updated KYC</option>
+                      <option value="other">Clearance / Debt Closure NOC</option>
+                    </select>
+                  </div>
+                </div>
+
+                {appealUploadedDoc ? (
+                  <div className="p-3.5 bg-emerald-50/80 border border-emerald-300 rounded-2xl flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-10 h-10 rounded-xl bg-emerald-100 border border-emerald-300 flex items-center justify-center shrink-0 text-emerald-700">
+                        <FileCheck className="w-5 h-5" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-stone-900 truncate block text-xs">
+                            {appealUploadedDoc.fileName}
+                          </span>
+                          <span className="text-[10px] bg-emerald-600 text-white font-bold px-2 py-0.5 rounded-full uppercase tracking-wider shrink-0">
+                            Attached
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-stone-500 mt-0.5 flex items-center gap-2">
+                          <span className="capitalize">{appealDocType.replace('_', ' ')}</span>
+                          {appealUploadedDoc.fileSize && (
+                            <span>• {(appealUploadedDoc.fileSize / 1024).toFixed(1)} KB</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <label className="px-3 py-1.5 bg-white hover:bg-stone-50 border border-stone-200 rounded-lg text-[11px] font-semibold text-stone-700 cursor-pointer transition shadow-xs">
+                        Change
+                        <input
+                          type="file"
+                          accept=".pdf,.png,.jpg,.jpeg,.webp"
+                          onChange={handleAppealFileSelect}
+                          className="hidden"
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setAppealUploadedDoc(null)}
+                        className="p-1.5 hover:bg-rose-100 text-stone-400 hover:text-rose-600 rounded-lg transition cursor-pointer"
+                        title="Remove file"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <label className="flex flex-col items-center justify-center p-4 border-2 border-dashed border-amber-300 hover:border-amber-500 bg-amber-50/50 hover:bg-amber-50/80 rounded-2xl cursor-pointer transition text-center group">
+                      <div className="w-10 h-10 rounded-xl bg-white shadow-xs border border-amber-200 flex items-center justify-center text-amber-700 group-hover:scale-105 transition mb-1.5">
+                        {appealUploadingDoc ? (
+                          <RefreshCw className="w-4 h-4 animate-spin text-amber-600" />
+                        ) : (
+                          <Upload className="w-4 h-4" />
+                        )}
+                      </div>
+                      <span className="font-bold text-[#3A1700] text-xs">
+                        {appealUploadingDoc ? 'Uploading document...' : 'Click to Browse & Select Supporting Document'}
+                      </span>
+                      <span className="text-[10px] text-stone-500 mt-0.5">
+                        Attach ITR, Debt Closure NOC, or updated statement (PDF, JPG, PNG up to 10MB)
+                      </span>
+                      <input
+                        type="file"
+                        accept=".pdf,.png,.jpg,.jpeg,.webp"
+                        onChange={handleAppealFileSelect}
+                        disabled={appealUploadingDoc}
+                        className="hidden"
+                      />
+                    </label>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex justify-end gap-2.5 pt-4 border-t border-stone-100">
+                <button
+                  type="button"
+                  onClick={() => setReconsiderationApp(null)}
+                  className="px-4 py-2 bg-stone-100 hover:bg-stone-200 text-stone-700 rounded-xl font-bold cursor-pointer transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingAppeal}
+                  className="px-6 py-2 bg-gradient-to-r from-amber-500 via-amber-600 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-xl font-bold shadow-md shadow-orange-500/25 cursor-pointer disabled:opacity-50 transition active:scale-95"
+                >
+                  {submittingAppeal ? 'Submitting Appeal...' : 'Submit Reconsideration Appeal'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Repayment Schedule Modal */}
       {activeScheduleApp && scheduleData && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-stone-900/60 backdrop-blur-sm flex justify-center items-center p-4">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl overflow-hidden border border-stone-200 my-auto">
-            <div className="p-6 bg-gradient-to-br from-[#2E1810] to-[#1E0F0A] text-white flex justify-between items-center">
+            <div className="p-6 bg-gradient-to-br from-[#2E1810] to-[#1E0F0A] text-white flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
                 <span className="text-xs uppercase font-bold text-amber-300">My Repayment Amortization Schedule</span>
                 <h3 className="text-lg font-bold">{activeScheduleApp.applicationNumber}</h3>
                 <p className="text-xs text-stone-300">Monthly EMI: ₹{Number(scheduleData.monthlyEmi).toLocaleString('en-IN')}/mo</p>
               </div>
-              <button
-                onClick={() => setActiveScheduleApp(null)}
-                className="p-1.5 text-stone-300 hover:text-white text-xl cursor-pointer"
-              >
-                &times;
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => exportLoanSummaryCSV(activeScheduleApp, scheduleData)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-bold transition border border-white/15 cursor-pointer shadow-xs active:scale-95"
+                  title="Download Repayment Schedule & Summary as CSV"
+                >
+                  <Download className="w-3.5 h-3.5 text-amber-300" />
+                  CSV
+                </button>
+                <button
+                  onClick={() => exportLoanSummaryPDF(activeScheduleApp, scheduleData)}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-xl text-xs font-bold transition shadow-md shadow-orange-500/25 cursor-pointer active:scale-95"
+                  title="Print or Save Official Statement as PDF"
+                >
+                  <Printer className="w-3.5 h-3.5" />
+                  Save / Print PDF
+                </button>
+                <button
+                  onClick={() => setActiveScheduleApp(null)}
+                  className="p-1.5 text-stone-300 hover:text-white text-xl cursor-pointer ml-1"
+                >
+                  &times;
+                </button>
+              </div>
             </div>
 
             <div className="p-6 space-y-4 max-h-[75vh] overflow-y-auto text-xs">
@@ -534,6 +1039,12 @@ export default function ApplicantDashboard() {
           </div>
         </div>
       )}
+      {/* Dedicated Loan Summary & Statement Export Modal */}
+      <LoanSummaryModal
+        app={summaryModalApp}
+        isOpen={Boolean(summaryModalApp)}
+        onClose={() => setSummaryModalApp(null)}
+      />
     </div>
   )
 }

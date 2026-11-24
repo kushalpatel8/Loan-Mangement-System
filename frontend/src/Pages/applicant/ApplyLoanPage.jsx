@@ -15,7 +15,8 @@ import {
   AlertCircle,
   FileCheck,
   Calculator,
-  ArrowRight
+  ArrowRight,
+  Trash2
 } from 'lucide-react'
 import {
   saveDraftApplication,
@@ -72,10 +73,11 @@ export default function ApplyLoanPage() {
   const { user } = useUser()
   const [searchParams] = useSearchParams()
   const resumeId = searchParams.get('resume')
+  const reapplyId = searchParams.get('reapplyFrom')
 
   const [currentStep, setCurrentStep] = useState(1)
   const [draftId, setDraftId] = useState(resumeId || null)
-  const [loadingDraft, setLoadingDraft] = useState(!!resumeId)
+  const [loadingDraft, setLoadingDraft] = useState(!!resumeId || !!reapplyId)
   const [savingDraft, setSavingDraft] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [statusMessage, setStatusMessage] = useState(null)
@@ -139,23 +141,10 @@ export default function ApplyLoanPage() {
     existingMonthlyEmi: 0
   })
 
-  // Step 4: Documents
-  const [documents, setDocuments] = useState([
-    {
-      documentType: 'id_proof',
-      fileName: 'PAN_Card.pdf',
-      fileSize: 1250000,
-      fileUrl: 'https://images.unsplash.com/photo-1586281380349-632531db7ed4?w=800'
-    },
-    {
-      documentType: 'income_proof',
-      fileName: 'Salary_Slips_Last3Months.pdf',
-      fileSize: 2400000,
-      fileUrl: 'https://images.unsplash.com/photo-1554224155-6726b3ff858f?w=800'
-    }
-  ])
+  // Step 4: Documents (Starts empty so only genuinely uploaded documents appear)
+  const [documents, setDocuments] = useState([])
 
-  // Resume Draft Loader
+  // Resume Draft Loader or Re-Apply Pre-fill
   useEffect(() => {
     if (resumeId) {
       setLoadingDraft(true)
@@ -171,8 +160,26 @@ export default function ApplyLoanPage() {
         }
         setLoadingDraft(false)
       })
+    } else if (reapplyId) {
+      setLoadingDraft(true)
+      getApplicationById(reapplyId).then((app) => {
+        if (app) {
+          // Pre-populate previous verified details, but start fresh as step 2 (Loan selection) with no draft ID
+          setDraftId(null)
+          setCurrentStep(2)
+          if (app.personalDetails) setPersonalDetails((prev) => ({ ...prev, ...app.personalDetails }))
+          if (app.incomeDetails) setIncomeDetails((prev) => ({ ...prev, ...app.incomeDetails }))
+          if (app.loanDetails) setLoanDetails((prev) => ({ ...prev, ...app.loanDetails, amount: Math.round(Number(app.loanDetails.amount || 300000) * 0.8) }))
+          if (app.documents && app.documents.length) setDocuments(app.documents)
+          setStatusMessage({
+            type: 'info',
+            text: `Re-applying: Pre-filled your profile from previous application ${app.applicationNumber}. Adjust your loan amount or tenure below.`
+          })
+        }
+        setLoadingDraft(false)
+      })
     }
-  }, [resumeId])
+  }, [resumeId, reapplyId])
 
   // Auto-calculated EMI Preview: E = P * r * (1 + r)^n / ((1 + r)^n - 1)
   const { monthlyEmi, totalInterest, totalAmount } = useMemo(() => {
@@ -245,6 +252,18 @@ export default function ApplyLoanPage() {
   // Final Application Submission
   const handleSubmitApplication = async (e) => {
     e.preventDefault()
+
+    // Validate mandatory documents: require genuine uploads
+    const hasId = documents.some((d) => d.documentType === 'id_proof')
+    const hasIncome = documents.some((d) => d.documentType === 'income_proof')
+    if (!hasId || !hasIncome) {
+      setStatusMessage({
+        type: 'error',
+        text: 'Please upload both Identity Proof (PAN / Aadhaar) and Income Proof before final submission.'
+      })
+      return
+    }
+
     setSubmitting(true)
     try {
       const activeEmail =
@@ -304,18 +323,13 @@ export default function ApplyLoanPage() {
     }
   }
 
-  // Fallback simulator for quick demo
-  const handleSimulateUpload = (type) => {
-    const fileName = type === 'id_proof' ? 'Passport_Scan.pdf' : 'Bank_Statement_6Months.pdf'
-    setDocuments((prev) => [
-      ...prev.filter((d) => d.documentType !== type),
-      {
-        documentType: type,
-        fileName,
-        fileSize: 1800000,
-        fileUrl: 'https://images.unsplash.com/photo-1554224155-6726b3ff858f?w=800'
-      }
-    ])
+  // Remove Document Handler
+  const handleRemoveDocument = (type) => {
+    setDocuments((prev) => prev.filter((d) => d.documentType !== type))
+    setStatusMessage({
+      type: 'info',
+      text: `Removed ${type === 'id_proof' ? 'Identity Proof' : 'Income Proof'}. You can upload a new file anytime.`
+    })
   }
 
   const steps = [
@@ -910,18 +924,49 @@ export default function ApplyLoanPage() {
                 <p className="text-[11px] text-stone-500 leading-relaxed">
                   Government issued PAN Card, Aadhaar Card, or Passport. (PDF, JPG, PNG)
                 </p>
-                <div className="pt-2">
-                  <label className="w-full py-2.5 px-3 bg-white border border-stone-300 hover:bg-stone-50 rounded-xl text-xs font-semibold text-stone-800 transition flex items-center justify-center gap-2 cursor-pointer shadow-xs">
-                    <Upload className="w-3.5 h-3.5 text-amber-600" />
-                    <span>{uploadingType === 'id_proof' ? 'Uploading...' : 'Choose File to Upload'}</span>
-                    <input
-                      type="file"
-                      accept=".pdf,.jpg,.jpeg,.png,.webp"
-                      onChange={(e) => handleRealFileUpload(e, 'id_proof')}
-                      className="hidden"
-                    />
-                  </label>
-                </div>
+
+                {documents.find((d) => d.documentType === 'id_proof') ? (
+                  <div className="pt-1 flex items-center justify-between p-2.5 bg-emerald-50/70 border border-emerald-200 rounded-xl">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <FileCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <span className="font-semibold text-[#3A1700] text-xs truncate">
+                        {documents.find((d) => d.documentType === 'id_proof').fileName}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <label className="text-[11px] font-semibold text-stone-600 hover:text-stone-900 bg-white border border-stone-200 px-2 py-1 rounded-lg cursor-pointer shadow-xs">
+                        Change
+                        <input
+                          type="file"
+                          accept=".pdf,.jpg,.jpeg,.png,.webp"
+                          onChange={(e) => handleRealFileUpload(e, 'id_proof')}
+                          className="hidden"
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveDocument('id_proof')}
+                        className="p-1 text-stone-400 hover:text-rose-600 transition cursor-pointer"
+                        title="Remove ID Proof"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="pt-2">
+                    <label className="w-full py-2.5 px-3 bg-white border border-stone-300 hover:bg-stone-50 rounded-xl text-xs font-semibold text-stone-800 transition flex items-center justify-center gap-2 cursor-pointer shadow-xs">
+                      <Upload className="w-3.5 h-3.5 text-amber-600" />
+                      <span>{uploadingType === 'id_proof' ? 'Uploading...' : 'Choose File to Upload'}</span>
+                      <input
+                        type="file"
+                        accept=".pdf,.jpg,.jpeg,.png,.webp"
+                        onChange={(e) => handleRealFileUpload(e, 'id_proof')}
+                        className="hidden"
+                      />
+                    </label>
+                  </div>
+                )}
               </div>
 
               {/* Income Proof Box */}
@@ -939,18 +984,49 @@ export default function ApplyLoanPage() {
                 <p className="text-[11px] text-stone-500 leading-relaxed">
                   Last 3 months salary slips, ITR acknowledgment, or Form 16. (PDF, JPG, PNG)
                 </p>
-                <div className="pt-2">
-                  <label className="w-full py-2.5 px-3 bg-white border border-stone-300 hover:bg-stone-50 rounded-xl text-xs font-semibold text-stone-800 transition flex items-center justify-center gap-2 cursor-pointer shadow-xs">
-                    <Upload className="w-3.5 h-3.5 text-amber-600" />
-                    <span>{uploadingType === 'income_proof' ? 'Uploading...' : 'Choose File to Upload'}</span>
-                    <input
-                      type="file"
-                      accept=".pdf,.jpg,.jpeg,.png,.webp"
-                      onChange={(e) => handleRealFileUpload(e, 'income_proof')}
-                      className="hidden"
-                    />
-                  </label>
-                </div>
+
+                {documents.find((d) => d.documentType === 'income_proof') ? (
+                  <div className="pt-1 flex items-center justify-between p-2.5 bg-emerald-50/70 border border-emerald-200 rounded-xl">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <FileCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <span className="font-semibold text-[#3A1700] text-xs truncate">
+                        {documents.find((d) => d.documentType === 'income_proof').fileName}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <label className="text-[11px] font-semibold text-stone-600 hover:text-stone-900 bg-white border border-stone-200 px-2 py-1 rounded-lg cursor-pointer shadow-xs">
+                        Change
+                        <input
+                          type="file"
+                          accept=".pdf,.jpg,.jpeg,.png,.webp"
+                          onChange={(e) => handleRealFileUpload(e, 'income_proof')}
+                          className="hidden"
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveDocument('income_proof')}
+                        className="p-1 text-stone-400 hover:text-rose-600 transition cursor-pointer"
+                        title="Remove Income Proof"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="pt-2">
+                    <label className="w-full py-2.5 px-3 bg-white border border-stone-300 hover:bg-stone-50 rounded-xl text-xs font-semibold text-stone-800 transition flex items-center justify-center gap-2 cursor-pointer shadow-xs">
+                      <Upload className="w-3.5 h-3.5 text-amber-600" />
+                      <span>{uploadingType === 'income_proof' ? 'Uploading...' : 'Choose File to Upload'}</span>
+                      <input
+                        type="file"
+                        accept=".pdf,.jpg,.jpeg,.png,.webp"
+                        onChange={(e) => handleRealFileUpload(e, 'income_proof')}
+                        className="hidden"
+                      />
+                    </label>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -959,24 +1035,49 @@ export default function ApplyLoanPage() {
               <span className="text-xs font-bold text-stone-700 uppercase tracking-wide">
                 Attached Files ({documents.length})
               </span>
-              <div className="divide-y divide-stone-100 border border-stone-200 rounded-2xl overflow-hidden bg-[#FFFDF9]">
-                {documents.map((doc, idx) => (
-                  <div key={idx} className="p-3.5 flex justify-between items-center text-xs">
-                    <div className="flex items-center gap-2.5">
-                      <FileCheck className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-                      <div>
-                        <span className="font-bold text-[#3A1700] block">{doc.fileName}</span>
-                        <span className="text-[10px] text-stone-400 uppercase font-medium">
-                          {doc.documentType.replace('_', ' ')} &bull; {(doc.fileSize / 1024 / 1024).toFixed(1)} MB
+              {documents.length === 0 ? (
+                <div className="p-6 rounded-2xl border border-dashed border-stone-200 bg-[#FFFDF9] text-center space-y-1">
+                  <FileText className="w-6 h-6 text-stone-300 mx-auto mb-1" />
+                  <p className="font-semibold text-stone-600 text-xs">No documents uploaded yet</p>
+                  <p className="text-[11px] text-stone-400">
+                    Upload your Identity Proof and Income Proof above to verify your application.
+                  </p>
+                </div>
+              ) : (
+                <div className="divide-y divide-stone-100 border border-stone-200 rounded-2xl overflow-hidden bg-[#FFFDF9]">
+                  {documents.map((doc, idx) => (
+                    <div key={idx} className="p-3.5 flex justify-between items-center text-xs">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <FileCheck className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                        <div className="min-w-0">
+                          <span className="font-bold text-[#3A1700] block truncate">{doc.fileName}</span>
+                          <span className="text-[10px] text-stone-400 uppercase font-medium">
+                            {doc.documentType.replace('_', ' ')} &bull;{' '}
+                            {doc.fileSize
+                              ? doc.fileSize > 1048576
+                                ? `${(doc.fileSize / 1024 / 1024).toFixed(1)} MB`
+                                : `${(doc.fileSize / 1024).toFixed(0)} KB`
+                              : 'Ready'}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="text-emerald-700 font-bold text-[10px] bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full">
+                          Ready
                         </span>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveDocument(doc.documentType)}
+                          className="p-1 hover:bg-rose-50 text-stone-400 hover:text-rose-600 rounded-lg transition cursor-pointer"
+                          title="Remove document"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
                       </div>
                     </div>
-                    <span className="text-emerald-700 font-bold text-[10px] bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full">
-                      Ready
-                    </span>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Pre-submission Summary Review */}

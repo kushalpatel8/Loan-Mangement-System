@@ -16,7 +16,11 @@ import {
   ExternalLink,
   ChevronRight,
   FileCheck,
-  Info
+  Info,
+  Download,
+  Printer,
+  RotateCcw,
+  Sparkles
 } from 'lucide-react'
 import {
   getApplications,
@@ -24,6 +28,7 @@ import {
   submitOfficerReview,
   clearDummyData
 } from '../../lib/loanWorkflowApi'
+import { exportLoanSummaryCSV, exportLoanSummaryPDF } from '../../utils/loanExportUtils'
 
 export default function OfficerPage() {
   const [applications, setApplications] = useState([])
@@ -45,6 +50,74 @@ export default function OfficerPage() {
 
   // Document preview modal
   const [previewDoc, setPreviewDoc] = useState(null)
+
+  // Aggregate and sort ALL documents from initial submission, response to officer, and reconsideration appeal
+  const allApplicationDocuments = useMemo(() => {
+    if (!selectedApp) return []
+
+    const docs = []
+    const seen = new Set()
+
+    const addDoc = (doc, source = 'Initial Submission') => {
+      if (!doc) return
+      const fileName = doc.fileName || doc.name || (doc.fileUrl ? doc.fileUrl.split('/').pop().split('?')[0] : 'Document')
+      const fileUrl = doc.fileUrl || doc.secure_url || doc.url || ''
+      if (!fileUrl && !fileName) return
+
+      const key = `${doc._id || ''}_${fileName}_${fileUrl}`
+      if (!seen.has(key)) {
+        seen.add(key)
+        const uploadedAtTime = doc.uploadedAt
+          ? new Date(doc.uploadedAt).getTime()
+          : (source.includes('Response') || source.includes('Appeal') ? Date.now() : 0)
+
+        docs.push({
+          ...doc,
+          fileName,
+          fileUrl,
+          source,
+          uploadedAt: doc.uploadedAt || new Date().toISOString(),
+          uploadedAtTime
+        })
+      }
+    }
+
+    // 1. Initial application documents
+    if (Array.isArray(selectedApp.documents)) {
+      selectedApp.documents.forEach((d) => addDoc(d, 'Initial KYC / Income Proof'))
+    }
+
+    // 2. Documents uploaded as response to officer's request
+    if (selectedApp.applicantResponse) {
+      if (Array.isArray(selectedApp.applicantResponse.additionalDocuments)) {
+        selectedApp.applicantResponse.additionalDocuments.forEach((d) =>
+          addDoc(d, 'Response to Officer Request')
+        )
+      }
+      if (selectedApp.applicantResponse.document) {
+        addDoc(selectedApp.applicantResponse.document, 'Response to Officer Request')
+      }
+    }
+
+    // 3. Documents uploaded as part of reconsideration appeal
+    if (selectedApp.reconsiderationRequest) {
+      if (Array.isArray(selectedApp.reconsiderationRequest.additionalDocuments)) {
+        selectedApp.reconsiderationRequest.additionalDocuments.forEach((d) =>
+          addDoc(d, 'Reconsideration Appeal')
+        )
+      }
+      if (selectedApp.reconsiderationRequest.document) {
+        addDoc(selectedApp.reconsiderationRequest.document, 'Reconsideration Appeal')
+      }
+    }
+
+    // Sort: newest / latest first
+    docs.sort((a, b) => (b.uploadedAtTime || 0) - (a.uploadedAtTime || 0))
+
+    return docs
+  }, [selectedApp])
+
+  const latestDocument = allApplicationDocuments.length > 0 ? allApplicationDocuments[0] : null
 
   const loadData = async () => {
     setLoading(true)
@@ -329,7 +402,18 @@ export default function OfficerPage() {
                         )}
                       </div>
                     </td>
-                    <td className="px-5 py-4">{getStatusBadge(app.status)}</td>
+                    <td className="px-5 py-4">
+                      <div className="space-y-1">
+                        {getStatusBadge(app.status)}
+                        {app.reconsiderationRequest && (
+                          <div>
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-amber-100 text-amber-900 border border-amber-300">
+                              <RotateCcw className="w-2.5 h-2.5 text-amber-700" /> Appeal Filed
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </td>
                     <td className="px-5 py-4 text-right">
                       <button
                         onClick={() => handleOpenReview(app)}
@@ -352,7 +436,7 @@ export default function OfficerPage() {
         <div className="fixed inset-0 z-50 overflow-y-auto bg-stone-900/60 backdrop-blur-sm flex justify-center items-start p-4 sm:p-6 lg:p-8">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-5xl overflow-hidden border border-stone-200 my-auto">
             {/* Modal Header */}
-            <div className="p-6 bg-gradient-to-br from-[#2E1810] to-[#1E0F0A] text-white flex justify-between items-center">
+            <div className="p-6 bg-gradient-to-br from-[#2E1810] to-[#1E0F0A] text-white flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
                 <div className="flex items-center gap-3">
                   <h2 className="text-xl sm:text-2xl font-bold">{selectedApp.applicationNumber}</h2>
@@ -362,12 +446,32 @@ export default function OfficerPage() {
                   Submitted on {new Date(selectedApp.createdAt).toLocaleDateString('en-IN')} &bull; Applicant: {selectedApp.personalDetails?.fullName}
                 </p>
               </div>
-              <button
-                onClick={() => setSelectedApp(null)}
-                className="p-2 text-stone-300 hover:text-white hover:bg-white/10 rounded-full transition cursor-pointer text-xl"
-              >
-                &times;
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => exportLoanSummaryCSV(selectedApp)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-bold transition border border-white/15 cursor-pointer shadow-xs active:scale-95"
+                  title="Export Applicant Loan Summary as CSV"
+                >
+                  <Download className="w-3.5 h-3.5 text-amber-300" />
+                  CSV
+                </button>
+                <button
+                  type="button"
+                  onClick={() => exportLoanSummaryPDF(selectedApp)}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-xl text-xs font-bold transition shadow-md shadow-orange-500/25 cursor-pointer active:scale-95"
+                  title="Print or Save Official Loan Summary PDF"
+                >
+                  <Printer className="w-3.5 h-3.5" />
+                  Save / Print PDF
+                </button>
+                <button
+                  onClick={() => setSelectedApp(null)}
+                  className="p-1.5 text-stone-300 hover:text-white hover:bg-white/10 rounded-full transition cursor-pointer text-xl ml-1"
+                >
+                  &times;
+                </button>
+              </div>
             </div>
 
             <div className="p-6 sm:p-8 space-y-8 max-h-[80vh] overflow-y-auto">
@@ -467,49 +571,177 @@ export default function OfficerPage() {
                 </div>
               </div>
 
-              {/* 2. Uploaded Documents Section */}
-              <div className="bg-white border border-stone-200/80 rounded-2xl p-6 shadow-xs space-y-4">
-                <div className="flex justify-between items-center">
-                  <h3 className="font-bold text-[#3A1700] flex items-center gap-2 text-sm uppercase tracking-wide">
-                    <FileCheck className="w-4 h-4 text-amber-600" />
-                    Uploaded Verification Documents ({selectedApp.documents?.length || 0})
-                  </h3>
-                  <span className="text-xs text-stone-400">Click preview to inspect uploaded KYC &amp; income proofs</span>
+              {/* 2. Uploaded Documents Section: Featuring LATEST Document & Complete History */}
+              <div className="bg-white border border-stone-200/80 rounded-2xl p-6 shadow-xs space-y-5">
+                <div className="flex flex-wrap justify-between items-center gap-2">
+                  <div>
+                    <h3 className="font-bold text-[#3A1700] flex items-center gap-2 text-sm uppercase tracking-wide">
+                      <FileCheck className="w-4 h-4 text-amber-600" />
+                      Uploaded Verification Documents ({allApplicationDocuments.length})
+                    </h3>
+                    <p className="text-xs text-stone-500 mt-0.5">
+                      All KYC, income proofs, and latest documents re-uploaded by the applicant.
+                    </p>
+                  </div>
+                  <span className="text-[11px] text-stone-500 bg-[#F8F5EE] border border-stone-200 px-3 py-1 rounded-full font-semibold">
+                    Newest uploads listed first
+                  </span>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                  {selectedApp.documents && selectedApp.documents.length > 0 ? (
-                    selectedApp.documents.map((doc, idx) => (
-                      <div
-                        key={idx}
-                        className="p-3.5 rounded-xl border border-stone-200 bg-[#F8F5EE]/60 hover:bg-[#F8F5EE] transition flex items-center justify-between"
-                      >
-                        <div className="flex items-center gap-3 overflow-hidden">
-                          <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-800 flex items-center justify-center flex-shrink-0 font-bold text-xs uppercase">
-                            {doc.documentType?.split('_')[0] || 'DOC'}
-                          </div>
-                          <div className="overflow-hidden">
-                            <p className="text-xs font-semibold text-stone-900 truncate" title={doc.fileName}>
-                              {doc.fileName}
-                            </p>
-                            <span className="text-[10px] text-stone-500 uppercase tracking-wider">
-                              {doc.documentType?.replace('_', ' ')}
+                {/* SPOTLIGHT: LATEST DOCUMENT SUBMITTED BY APPLICANT */}
+                {latestDocument ? (
+                  <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-amber-500/5 border-2 border-amber-400 rounded-2xl shadow-xs space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className="flex h-2.5 w-2.5 relative">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                        </span>
+                        <span className="text-[10px] font-black uppercase tracking-wider text-emerald-900 bg-emerald-100 border border-emerald-300 px-2.5 py-0.5 rounded-full">
+                          LATEST UPLOADED BY APPLICANT
+                        </span>
+                        <span className="text-[11px] text-stone-600 font-medium">
+                          Context: <strong className="text-[#3A1700]">{latestDocument.source}</strong>
+                        </span>
+                      </div>
+
+                      {latestDocument.uploadedAt && (
+                        <span className="text-[11px] text-stone-600 font-semibold flex items-center gap-1">
+                          <Clock className="w-3.5 h-3.5 text-amber-700" />
+                          Uploaded on {new Date(latestDocument.uploadedAt).toLocaleString()}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 bg-white rounded-xl border border-amber-300 shadow-xs">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-11 h-11 rounded-xl bg-amber-100 border border-amber-300 flex items-center justify-center shrink-0 font-bold text-amber-900">
+                          <FileCheck className="w-5 h-5 text-amber-700" />
+                        </div>
+                        <div className="min-w-0">
+                          <h4 className="font-bold text-[#3A1700] text-sm truncate" title={latestDocument.fileName}>
+                            {latestDocument.fileName}
+                          </h4>
+                          <div className="flex flex-wrap items-center gap-2 text-[11px] text-stone-500 mt-0.5">
+                            <span className="capitalize font-bold text-amber-800">
+                              {latestDocument.documentType?.replace('_', ' ') || 'Document'}
                             </span>
+                            {latestDocument.fileSize && (
+                              <span>&bull; {(latestDocument.fileSize / 1024).toFixed(0)} KB</span>
+                            )}
+                            {latestDocument.fileUrl?.includes('cloudinary.com') && (
+                              <span className="text-[10px] bg-sky-100 text-sky-800 font-bold px-1.5 py-0.5 rounded border border-sky-200">
+                                Cloudinary CDN
+                              </span>
+                            )}
                           </div>
                         </div>
-
-                        <button
-                          onClick={() => setPreviewDoc(doc)}
-                          className="p-1.5 text-amber-700 hover:text-amber-900 hover:bg-amber-100/50 rounded-lg transition flex-shrink-0 cursor-pointer"
-                          title="Preview Document"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
                       </div>
-                    ))
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => setPreviewDoc(latestDocument)}
+                          className="px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-md shadow-orange-500/20 cursor-pointer"
+                        >
+                          <Eye className="w-3.5 h-3.5" /> Inspect Latest Document
+                        </button>
+                        <a
+                          href={latestDocument.fileUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="p-2 bg-stone-100 hover:bg-stone-200 text-stone-700 border border-stone-200 rounded-xl transition"
+                          title="Open original file in new tab"
+                        >
+                          <ExternalLink className="w-4 h-4" />
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
+
+                {/* ALL UPLOADED DOCUMENTS GRID */}
+                <div className="space-y-2">
+                  <span className="text-xs font-bold text-[#3A1700] uppercase tracking-wide block">
+                    All Application Documents ({allApplicationDocuments.length})
+                  </span>
+
+                  {allApplicationDocuments.length > 0 ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                      {allApplicationDocuments.map((doc, idx) => {
+                        const isLatest = idx === 0
+                        return (
+                          <div
+                            key={idx}
+                            className={`p-3.5 rounded-2xl border transition flex flex-col justify-between space-y-3 ${
+                              isLatest
+                                ? 'border-amber-300 bg-amber-50/50 shadow-xs'
+                                : 'border-stone-200 bg-[#F8F5EE]/60 hover:bg-[#F8F5EE]'
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex items-center gap-2.5 overflow-hidden">
+                                <div
+                                  className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 font-bold text-xs uppercase ${
+                                    isLatest ? 'bg-amber-200 text-amber-900' : 'bg-stone-200 text-stone-700'
+                                  }`}
+                                >
+                                  <FileText className="w-4 h-4" />
+                                </div>
+                                <div className="overflow-hidden">
+                                  <p className="text-xs font-bold text-[#3A1700] truncate" title={doc.fileName}>
+                                    {doc.fileName}
+                                  </p>
+                                  <span className="text-[10px] text-stone-500 uppercase font-semibold">
+                                    {doc.documentType?.replace('_', ' ')}
+                                  </span>
+                                </div>
+                              </div>
+
+                              {isLatest && (
+                                <span className="px-2 py-0.5 text-[9px] font-black uppercase tracking-wider bg-emerald-600 text-white rounded-full shrink-0">
+                                  LATEST
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="flex items-center justify-between pt-2 border-t border-stone-200/70 text-[10px] text-stone-500">
+                              <div>
+                                <span className="block font-medium text-stone-700">{doc.source}</span>
+                                {doc.uploadedAt && (
+                                  <span className="text-[9px] text-stone-400">
+                                    {new Date(doc.uploadedAt).toLocaleDateString()}
+                                  </span>
+                                )}
+                              </div>
+
+                              <div className="flex items-center gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => setPreviewDoc(doc)}
+                                  className="p-1.5 text-amber-700 hover:text-amber-900 hover:bg-amber-100 rounded-lg transition cursor-pointer"
+                                  title="Quick Preview"
+                                >
+                                  <Eye className="w-3.5 h-3.5" />
+                                </button>
+                                <a
+                                  href={doc.fileUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="p-1.5 text-stone-500 hover:text-stone-900 hover:bg-stone-200/60 rounded-lg transition"
+                                  title="Open in New Tab"
+                                >
+                                  <ExternalLink className="w-3.5 h-3.5" />
+                                </a>
+                              </div>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
                   ) : (
-                    <div className="col-span-3 text-center py-6 text-xs text-stone-400">
-                      No documents uploaded yet.
+                    <div className="text-center py-8 text-xs text-stone-400 bg-[#F8F5EE]/40 border border-dashed border-stone-200 rounded-2xl">
+                      No verification documents found for this application.
                     </div>
                   )}
                 </div>
@@ -612,17 +844,139 @@ export default function OfficerPage() {
 
               {/* 4. Applicant Response to More Info (if existing) */}
               {selectedApp.applicantResponse && (
-                <div className="p-5 rounded-2xl bg-amber-50 border border-amber-200 space-y-2">
-                  <div className="flex items-center gap-2 text-xs font-bold text-amber-800 uppercase tracking-wide">
-                    <AlertCircle className="w-4 h-4 text-amber-600" />
-                    Applicant Response to Information Request
+                <div className="p-5 rounded-2xl bg-amber-50 border border-amber-200 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-xs font-bold text-amber-800 uppercase tracking-wide">
+                      <AlertCircle className="w-4 h-4 text-amber-600" />
+                      Applicant Response to Information Request
+                    </div>
+                    {selectedApp.applicantResponse.respondedAt && (
+                      <span className="text-[10px] text-amber-700 font-semibold">
+                        Responded on {new Date(selectedApp.applicantResponse.respondedAt).toLocaleString()}
+                      </span>
+                    )}
                   </div>
-                  <p className="text-xs text-amber-900 leading-relaxed font-medium">
+                  <p className="text-xs text-amber-950 font-medium leading-relaxed bg-white/80 p-3.5 rounded-xl border border-amber-200">
                     &quot;{selectedApp.applicantResponse.responseText}&quot;
                   </p>
-                  <span className="text-[10px] text-amber-700">
-                    Responded on {new Date(selectedApp.applicantResponse.respondedAt).toLocaleString()}
-                  </span>
+
+                  {/* Attached Documents in Applicant Response */}
+                  {((selectedApp.applicantResponse.additionalDocuments && selectedApp.applicantResponse.additionalDocuments.length > 0) || selectedApp.applicantResponse.document) && (
+                    <div className="pt-1">
+                      <span className="text-[11px] font-bold text-amber-900 block mb-1.5 uppercase tracking-wide">
+                        Attached Document(s) in Response:
+                      </span>
+                      <div className="space-y-2">
+                        {(selectedApp.applicantResponse.additionalDocuments || [selectedApp.applicantResponse.document]).filter(Boolean).map((doc, i) => (
+                          <div key={i} className="flex items-center justify-between p-3 bg-white rounded-xl border border-amber-300 shadow-2xs">
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <FileCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+                              <div className="min-w-0">
+                                <span className="font-bold text-stone-900 text-xs block truncate">{doc.fileName}</span>
+                                <span className="text-[10px] text-stone-500 uppercase font-semibold">
+                                  {doc.documentType?.replace('_', ' ')} {doc.fileSize ? `&bull; ${(doc.fileSize / 1024).toFixed(0)} KB` : ''}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => setPreviewDoc(doc)}
+                                className="px-3 py-1.5 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+                              >
+                                <Eye className="w-3.5 h-3.5" /> Preview
+                              </button>
+                              <a
+                                href={doc.fileUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="p-1.5 bg-stone-100 hover:bg-stone-200 text-stone-600 rounded-lg transition"
+                                title="Open in new tab"
+                              >
+                                <ExternalLink className="w-3.5 h-3.5" />
+                              </a>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Applicant Reconsideration Appeal (if existing) */}
+              {selectedApp.reconsiderationRequest && (
+                <div className="p-5 rounded-2xl bg-amber-50/80 border-2 border-amber-300 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-xs font-bold text-amber-900 uppercase tracking-wide">
+                      <RotateCcw className="w-4 h-4 text-amber-700" />
+                      Applicant Reconsideration Appeal (Previously Rejected)
+                    </div>
+                    {selectedApp.reconsiderationRequest.requestedAt && (
+                      <span className="text-[10px] text-amber-800 font-semibold bg-amber-100 px-2 py-0.5 rounded-full">
+                        Appealed on {new Date(selectedApp.reconsiderationRequest.requestedAt).toLocaleDateString()}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-amber-950 font-medium leading-relaxed bg-white/80 p-3 rounded-xl border border-amber-200">
+                    &quot;{selectedApp.reconsiderationRequest.appealStatement}&quot;
+                  </p>
+                  {(selectedApp.reconsiderationRequest.adjustedAmount || selectedApp.reconsiderationRequest.adjustedTenure) && (
+                    <div className="flex items-center gap-4 text-xs text-amber-900 pt-1 font-semibold">
+                      {selectedApp.reconsiderationRequest.adjustedAmount && (
+                        <span>
+                          Adjusted Requested Principal: <strong>₹{Number(selectedApp.reconsiderationRequest.adjustedAmount).toLocaleString('en-IN')}</strong>
+                        </span>
+                      )}
+                      {selectedApp.reconsiderationRequest.adjustedTenure && (
+                        <span>
+                          Adjusted Tenure: <strong>{selectedApp.reconsiderationRequest.adjustedTenure} Months</strong>
+                        </span>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Attached Proof in Reconsideration Appeal */}
+                  {((selectedApp.reconsiderationRequest.additionalDocuments && selectedApp.reconsiderationRequest.additionalDocuments.length > 0) || selectedApp.reconsiderationRequest.document) && (
+                    <div className="pt-1">
+                      <span className="text-[11px] font-bold text-amber-900 block mb-1.5 uppercase tracking-wide">
+                        Attached Supporting Proof:
+                      </span>
+                      <div className="space-y-2">
+                        {(selectedApp.reconsiderationRequest.additionalDocuments || [selectedApp.reconsiderationRequest.document]).filter(Boolean).map((doc, i) => (
+                          <div key={i} className="flex items-center justify-between p-3 bg-white rounded-xl border border-amber-300 shadow-2xs">
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <FileCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+                              <div className="min-w-0">
+                                <span className="font-bold text-stone-900 text-xs block truncate">{doc.fileName}</span>
+                                <span className="text-[10px] text-stone-500 uppercase font-semibold">
+                                  {doc.documentType?.replace('_', ' ')} {doc.fileSize ? `&bull; ${(doc.fileSize / 1024).toFixed(0)} KB` : ''}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => setPreviewDoc(doc)}
+                                className="px-3 py-1.5 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+                              >
+                                <Eye className="w-3.5 h-3.5" /> Preview
+                              </button>
+                              <a
+                                href={doc.fileUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="p-1.5 bg-stone-100 hover:bg-stone-200 text-stone-600 rounded-lg transition"
+                                title="Open in new tab"
+                              >
+                                <ExternalLink className="w-3.5 h-3.5" />
+                              </a>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -781,28 +1135,62 @@ export default function OfficerPage() {
               </button>
             </div>
 
-            <div className="bg-[#F8F5EE] rounded-2xl p-4 flex flex-col items-center justify-center min-h-[300px] border border-stone-200/60">
-              <img
-                src={previewDoc.fileUrl}
-                alt={previewDoc.fileName}
-                className="max-h-80 w-auto rounded-xl shadow-xs object-contain"
-                onError={(e) => {
-                  e.target.style.display = 'none'
-                  e.target.nextSibling.style.display = 'block'
-                }}
-              />
-              <div style={{ display: 'none' }} className="text-center p-8 text-stone-500 text-xs">
-                <FileText className="w-12 h-12 mx-auto text-stone-400 mb-2" />
-                <p>Preview rendered for document: {previewDoc.fileName}</p>
-                <a
-                  href={previewDoc.fileUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="mt-3 inline-flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-xl text-xs font-bold shadow-md shadow-orange-500/20"
-                >
-                  <ExternalLink className="w-3.5 h-3.5" /> Open in New Tab
-                </a>
-              </div>
+            <div className="bg-[#F8F5EE] rounded-2xl p-4 flex flex-col items-center justify-center min-h-[350px] border border-stone-200/60 overflow-hidden">
+              {previewDoc.fileName?.toLowerCase().endsWith('.pdf') || previewDoc.mimeType === 'application/pdf' ? (
+                <div className="w-full flex flex-col items-center space-y-3">
+                  <iframe
+                    src={previewDoc.fileUrl}
+                    title={previewDoc.fileName}
+                    className="w-full h-[420px] rounded-xl border border-stone-300 bg-white shadow-xs"
+                  />
+                  <div className="flex flex-wrap items-center justify-center gap-3">
+                    <a
+                      href={previewDoc.fileUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-xl text-xs font-bold shadow-md shadow-orange-500/20"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" /> Open on Cloudinary CDN
+                    </a>
+
+                    {previewDoc.localUrl && (
+                      <a
+                        href={previewDoc.localUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1.5 px-4 py-2 bg-stone-100 hover:bg-stone-200 text-stone-800 border border-stone-300 rounded-xl text-xs font-bold transition"
+                        title="Direct local server copy"
+                      >
+                        <FileText className="w-3.5 h-3.5 text-amber-700" /> Open via Server Mirror
+                      </a>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <img
+                    src={previewDoc.fileUrl}
+                    alt={previewDoc.fileName}
+                    className="max-h-80 w-auto rounded-xl shadow-xs object-contain"
+                    onError={(e) => {
+                      e.target.style.display = 'none'
+                      if (e.target.nextSibling) e.target.nextSibling.style.display = 'block'
+                    }}
+                  />
+                  <div style={{ display: 'none' }} className="text-center p-8 text-stone-500 text-xs">
+                    <FileText className="w-12 h-12 mx-auto text-stone-400 mb-2" />
+                    <p className="font-semibold text-stone-800">Document: {previewDoc.fileName}</p>
+                    <a
+                      href={previewDoc.fileUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-3 inline-flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-xl text-xs font-bold shadow-md shadow-orange-500/20"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" /> Open in New Tab
+                    </a>
+                  </div>
+                </>
+              )}
             </div>
 
             <div className="flex justify-end">

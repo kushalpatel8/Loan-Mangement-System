@@ -1,32 +1,9 @@
 import multer from "multer"
 import path from "path"
-import fs from "fs"
 import { AppError } from "./errorMiddleware.js"
 
-// Target directory for uploaded documents
-const uploadDir = path.resolve(process.cwd(), "uploads", "documents")
-
-// Ensure directory exists
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true })
-}
-
-// Disk Storage Configuration
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, uploadDir)
-  },
-  filename: (req, file, cb) => {
-    // Generate clean, sanitized, unique filename: doc-<timestamp>-<random><extension>
-    const ext = path.extname(file.originalname).toLowerCase()
-    const sanitizedBase = path
-      .basename(file.originalname, ext)
-      .replace(/[^a-zA-Z0-9_-]/g, "_")
-      .substring(0, 30)
-    const uniqueSuffix = `${Date.now()}_${Math.round(Math.random() * 1e6)}`
-    cb(null, `doc_${sanitizedBase}_${uniqueSuffix}${ext}`)
-  }
-})
+// In-Memory Storage Configuration for direct MongoDB Atlas storage
+const storage = multer.memoryStorage()
 
 // File Filter: Allow only PDF and image formats (JPEG, PNG, WebP)
 const fileFilter = (req, file, cb) => {

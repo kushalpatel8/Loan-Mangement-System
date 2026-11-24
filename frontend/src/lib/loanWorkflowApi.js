@@ -231,8 +231,60 @@ export const saveDraftApplication = async (payload) => {
   return saveLocalDraft(payload)
 }
 
-// 3.1 Upload Document File (Multipart FormData)
+// Cloudinary direct browser upload helper
+const uploadDirectToCloudinary = async (file, folder = 'loan_management_system/documents') => {
+  const cloudUrl =
+    import.meta.env.VITE_CLOUDINARY_URL ||
+    'cloudinary://825456344341562:aneaq0vArvsEpUWjhWmXa2HMgnE@hwg5chas'
+  const match = cloudUrl.match(/cloudinary:\/\/([^:]+):([^@]+)@(.+)/)
+  if (!match) return null
+
+  const apiKey = import.meta.env.VITE_CLOUDINARY_API_KEY || match[1]
+  const apiSecret = import.meta.env.VITE_CLOUDINARY_API_SECRET || match[2]
+  const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || match[3]
+
+  const timestamp = Math.floor(Date.now() / 1000)
+  const stringToSign = `folder=${folder}&timestamp=${timestamp}${apiSecret}`
+
+  // Compute SHA-1 signature using standard browser Web Crypto API
+  const encoder = new TextEncoder()
+  const data = encoder.encode(stringToSign)
+  const hashBuffer = await crypto.subtle.digest('SHA-1', data)
+  const hashArray = Array.from(new Uint8Array(hashBuffer))
+  const signature = hashArray.map((b) => b.toString(16).padStart(2, '0')).join('')
+
+  const formData = new FormData()
+  formData.append('file', file)
+  formData.append('api_key', apiKey)
+  formData.append('timestamp', String(timestamp))
+  formData.append('signature', signature)
+  formData.append('folder', folder)
+
+  const isPdf = file.name?.toLowerCase().endsWith('.pdf') || file.type === 'application/pdf'
+  const endpointType = isPdf ? 'raw' : 'image'
+
+  const res = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/${endpointType}/upload`, {
+    method: 'POST',
+    body: formData
+  })
+
+  if (res.ok) {
+    const data = await res.json()
+    return {
+      fileUrl: data.secure_url || data.url,
+      publicId: data.public_id,
+      bytes: data.bytes,
+      format: data.format
+    }
+  } else {
+    const errData = await res.json().catch(() => ({}))
+    throw new Error(errData?.error?.message || 'Cloudinary upload failed')
+  }
+}
+
+// 3.1 Upload Document File (MongoDB Atlas Database Storage with In-Memory Buffer)
 export const uploadDocumentFile = async (file, documentType = 'id_proof') => {
+  // 1. Upload to Backend MongoDB Document Storage
   try {
     const headers = await getAuthHeaders()
     // Remove Content-Type so browser sets boundary for multipart/form-data
@@ -253,13 +305,17 @@ export const uploadDocumentFile = async (file, documentType = 'id_proof') => {
       if (json.documents && json.documents.length > 0) {
         return json.documents[0]
       }
+    } else {
+      const errJson = await res.json().catch(() => ({}))
+      console.warn('Backend MongoDB upload error response:', errJson?.message)
     }
   } catch (err) {
-    console.warn('Backend file upload unavailable, generating client preview:', err.message)
+    console.warn('Backend file upload to MongoDB unavailable, using local preview fallback:', err.message)
   }
 
-  // Resilient client fallback (creates blob object URL for immediate preview)
+  // 2. Resilient client fallback (creates blob object URL for immediate preview)
   return {
+    _id: `doc_${Date.now()}`,
     documentType,
     fileName: file.name,
     fileSize: file.size,
@@ -533,7 +589,18 @@ const toggleLocalUserStatus = (userId) => {
   }
   return null
 }
-export const respondToMoreInfo = async (id, { responseText, newDocumentName }) => {
+export const respondToMoreInfo = async (
+  id,
+  { responseText, additionalDocuments, document, newDocumentName }
+) => {
+  const docs = additionalDocuments || (document ? [document] : (newDocumentName ? [{
+    documentType: 'id_proof',
+    fileName: newDocumentName,
+    fileUrl: 'https://images.unsplash.com/photo-1554224155-6726b3ff858f?w=800',
+    fileSize: 1500000,
+    uploadedAt: new Date().toISOString()
+  }] : []))
+
   try {
     const headers = await getAuthHeaders()
     const res = await fetch(`${API_BASE_URL}/applications/${id}/respond-info`, {
@@ -541,15 +608,7 @@ export const respondToMoreInfo = async (id, { responseText, newDocumentName }) =
       headers,
       body: JSON.stringify({
         responseText,
-        additionalDocuments: newDocumentName
-          ? [
-            {
-              documentType: 'income_proof',
-              fileName: newDocumentName,
-              fileUrl: 'https://images.unsplash.com/photo-1554224155-6726b3ff858f?w=800'
-            }
-          ]
-          : []
+        additionalDocuments: docs
       })
     })
 
@@ -564,7 +623,47 @@ export const respondToMoreInfo = async (id, { responseText, newDocumentName }) =
     console.warn('Live API /applications/respond-info unavailable, using local state:', err.message)
   }
 
-  return respondLocalMoreInfo(id, { responseText, newDocumentName })
+  return respondLocalMoreInfo(id, { responseText, additionalDocuments: docs, newDocumentName })
+}
+
+// 12. Applicant Request Reconsideration (Appeal Rejected Application)
+export const requestReconsideration = async (
+  id,
+  { appealStatement, adjustedAmount, adjustedTenure, newDocumentName, document, additionalDocuments }
+) => {
+  const docs = additionalDocuments || (document ? [document] : (newDocumentName ? [{
+    documentType: 'other',
+    fileName: newDocumentName,
+    fileUrl: 'https://images.unsplash.com/photo-1554224155-6726b3ff858f?w=800',
+    fileSize: 1500000,
+    uploadedAt: new Date().toISOString()
+  }] : []))
+
+  try {
+    const headers = await getAuthHeaders()
+    const res = await fetch(`${API_BASE_URL}/applications/${id}/request-reconsideration`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        appealStatement,
+        adjustedAmount: adjustedAmount ? Number(adjustedAmount) : undefined,
+        adjustedTenure: adjustedTenure ? Number(adjustedTenure) : undefined,
+        additionalDocuments: docs
+      })
+    })
+
+    if (res.ok) {
+      const json = await res.json()
+      if (json.application) {
+        saveLocalApp(json.application)
+        return json.application
+      }
+    }
+  } catch (err) {
+    console.warn('Live API request-reconsideration unavailable, using local state:', err.message)
+  }
+
+  return requestLocalReconsideration(id, { appealStatement, adjustedAmount, adjustedTenure, newDocumentName, additionalDocuments: docs })
 }
 
 // -------------------------------------------------------------
@@ -1272,21 +1371,92 @@ const updateLocalInstallmentStatus = (scheduleId, installmentNumber, { status, p
   return schedule
 }
 
-const respondLocalMoreInfo = (id, { responseText, newDocumentName }) => {
+const respondLocalMoreInfo = (id, { responseText, additionalDocuments, newDocumentName }) => {
   const apps = getStoredApps()
   const index = apps.findIndex((a) => a._id === id)
   if (index === -1) throw new Error('Application not found')
 
   const app = apps[index]
+  const docs = additionalDocuments || (newDocumentName ? [{
+    _id: `doc_${Date.now()}`,
+    documentType: 'id_proof',
+    fileName: newDocumentName,
+    fileUrl: 'https://images.unsplash.com/photo-1554224155-6726b3ff858f?w=800',
+    fileSize: 1500000,
+    uploadedAt: new Date().toISOString()
+  }] : [])
+
   app.applicantResponse = {
     responseText,
-    respondedAt: new Date().toISOString()
+    respondedAt: new Date().toISOString(),
+    additionalDocuments: docs
   }
 
-  if (newDocumentName) {
+  app.documents = app.documents || []
+  if (docs.length > 0) {
+    app.documents.push(...docs)
+  }
+
+  app.status = 'under_review'
+  apps[index] = app
+  saveStoredApps(apps)
+  return app
+}
+
+const requestLocalReconsideration = (
+  id,
+  { appealStatement, adjustedAmount, adjustedTenure, newDocumentName, additionalDocuments }
+) => {
+  const apps = getStoredApps()
+  const index = apps.findIndex((a) => a._id === id)
+  if (index === -1) throw new Error('Application not found')
+
+  const app = apps[index]
+
+  // Attach reconsideration payload
+  app.reconsiderationRequest = {
+    appealStatement: appealStatement || 'Applicant requested reconsideration with updated terms.',
+    requestedAt: new Date().toISOString(),
+    adjustedAmount: adjustedAmount ? Number(adjustedAmount) : null,
+    adjustedTenure: adjustedTenure ? Number(adjustedTenure) : null
+  }
+
+  // Adjust terms if requested
+  if (adjustedAmount && Number(adjustedAmount) > 0) {
+    app.loanDetails = app.loanDetails || {}
+    app.loanDetails.amount = Number(adjustedAmount)
+  }
+  if (adjustedTenure && Number(adjustedTenure) > 0) {
+    app.loanDetails = app.loanDetails || {}
+    app.loanDetails.tenureMonths = Number(adjustedTenure)
+  }
+
+  // Recalculate monthly EMI preview
+  if (app.loanDetails?.amount && app.loanDetails?.tenureMonths && app.loanDetails?.interestRate) {
+    const P = app.loanDetails.amount
+    const r = (app.loanDetails.interestRate / 12) / 100
+    const n = app.loanDetails.tenureMonths
+    const emi = Math.round((P * r * Math.pow(1 + r, n)) / (Math.pow(1 + r, n) - 1))
+    app.loanDetails.monthlyEmiPreview = emi
+  }
+
+  if (Array.isArray(additionalDocuments) && additionalDocuments.length > 0) {
+    app.documents = app.documents || []
+    additionalDocuments.forEach((doc) => {
+      app.documents.push({
+        _id: doc._id || `doc_${Date.now()}_${Math.random().toString(36).substring(7)}`,
+        documentType: doc.documentType || 'other',
+        fileName: doc.fileName,
+        fileUrl: doc.fileUrl || 'https://images.unsplash.com/photo-1554224155-6726b3ff858f?w=800',
+        fileSize: doc.fileSize || 1500000,
+        uploadedAt: doc.uploadedAt || new Date().toISOString()
+      })
+    })
+  } else if (newDocumentName) {
+    app.documents = app.documents || []
     app.documents.push({
       _id: `doc_${Date.now()}`,
-      documentType: 'income_proof',
+      documentType: 'other',
       fileName: newDocumentName,
       fileUrl: 'https://images.unsplash.com/photo-1554224155-6726b3ff858f?w=800',
       fileSize: 1500000,
@@ -1294,6 +1464,8 @@ const respondLocalMoreInfo = (id, { responseText, newDocumentName }) => {
     })
   }
 
+  // Reset decision and return to under_review state
+  delete app.adminDecision
   app.status = 'under_review'
   apps[index] = app
   saveStoredApps(apps)
@@ -1312,5 +1484,6 @@ export default {
   submitAdminDecision,
   getRepaymentSchedule,
   updateInstallmentStatus,
-  respondToMoreInfo
+  respondToMoreInfo,
+  requestReconsideration
 }

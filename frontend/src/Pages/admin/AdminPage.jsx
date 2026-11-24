@@ -18,7 +18,9 @@ import {
   TrendingUp,
   FileText,
   CreditCard,
-  Check
+  Check,
+  Download,
+  Printer
 } from 'lucide-react'
 import {
   getApplications,
@@ -30,6 +32,8 @@ import {
   toggleUserStatus,
   clearDummyData
 } from '../../lib/loanWorkflowApi'
+import LoanSummaryModal from '../../components/LoanSummaryModal'
+import { exportLoanSummaryCSV, exportLoanSummaryPDF } from '../../utils/loanExportUtils'
 
 export default function AdminPage() {
   const [applications, setApplications] = useState([])
@@ -37,6 +41,9 @@ export default function AdminPage() {
   const [activeTab, setActiveTab] = useState('recommended')
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedLoanType, setSelectedLoanType] = useState('all')
+
+  // Summary statement modal
+  const [summaryModalApp, setSummaryModalApp] = useState(null)
 
   // User Management State (Admin feature)
   const [usersList, setUsersList] = useState([])
@@ -545,23 +552,32 @@ export default function AdminPage() {
                       </td>
                       <td className="px-5 py-4">{getStatusBadge(app.status)}</td>
                       <td className="px-5 py-4 text-right">
-                        {app.status === 'approved' ? (
+                        <div className="flex items-center justify-end gap-2">
                           <button
-                            onClick={() => handleViewSchedule(app)}
-                            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-300 rounded-xl text-xs font-bold transition cursor-pointer"
+                            onClick={() => setSummaryModalApp(app)}
+                            className="p-2 bg-[#F8F5EE] hover:bg-[#F0ECE2] text-stone-700 hover:text-amber-800 border border-stone-200/90 rounded-xl text-xs font-semibold transition cursor-pointer shadow-2xs active:scale-95"
+                            title="View & Export Summary (CSV / PDF)"
                           >
-                            <CreditCard className="w-3.5 h-3.5" />
-                            View EMI Schedule
+                            <FileText className="w-3.5 h-3.5" />
                           </button>
-                        ) : (
-                          <button
-                            onClick={() => handleOpenDecision(app)}
-                            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white shadow-sm font-bold rounded-xl text-xs transition cursor-pointer active:scale-95"
-                          >
-                            <ShieldCheck className="w-3.5 h-3.5" />
-                            Take Final Decision
-                          </button>
-                        )}
+                          {app.status === 'approved' ? (
+                            <button
+                              onClick={() => handleViewSchedule(app)}
+                              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-300 rounded-xl text-xs font-bold transition cursor-pointer"
+                            >
+                              <CreditCard className="w-3.5 h-3.5" />
+                              View EMI Schedule
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => handleOpenDecision(app)}
+                              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white shadow-sm font-bold rounded-xl text-xs transition cursor-pointer active:scale-95"
+                            >
+                              <ShieldCheck className="w-3.5 h-3.5" />
+                              Take Final Decision
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -711,7 +727,7 @@ export default function AdminPage() {
         <div className="fixed inset-0 z-50 overflow-y-auto bg-[#2E1810]/60 backdrop-blur-sm flex justify-center items-start p-4 sm:p-6 lg:p-8">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-5xl overflow-hidden border border-stone-200/80 my-auto">
             {/* Modal Header */}
-            <div className="p-6 bg-gradient-to-br from-[#2E1810] to-[#1E0F0A] text-white flex justify-between items-center">
+            <div className="p-6 bg-gradient-to-br from-[#2E1810] to-[#1E0F0A] text-white flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
                 <span className="text-xs uppercase tracking-wider text-amber-400 font-bold">
                   Repayment Schedule &amp; EMI Amortization
@@ -721,12 +737,32 @@ export default function AdminPage() {
                   Applicant: {viewScheduleApp.personalDetails?.fullName} &bull; Principal: ₹{Number(viewScheduleApp.loanDetails?.amount || 0).toLocaleString('en-IN')}
                 </p>
               </div>
-              <button
-                onClick={() => setViewScheduleApp(null)}
-                className="p-2 text-stone-400 hover:text-white hover:bg-white/10 rounded-full transition"
-              >
-                &times;
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => exportLoanSummaryCSV(viewScheduleApp, scheduleData)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-bold transition border border-white/15 cursor-pointer shadow-xs active:scale-95"
+                  title="Export Repayment Schedule & Summary as CSV"
+                >
+                  <Download className="w-3.5 h-3.5 text-amber-300" />
+                  CSV
+                </button>
+                <button
+                  type="button"
+                  onClick={() => exportLoanSummaryPDF(viewScheduleApp, scheduleData)}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-xl text-xs font-bold transition shadow-md shadow-orange-500/25 cursor-pointer active:scale-95"
+                  title="Print or Save Official Statement as PDF"
+                >
+                  <Printer className="w-3.5 h-3.5" />
+                  Save / Print PDF
+                </button>
+                <button
+                  onClick={() => setViewScheduleApp(null)}
+                  className="p-1.5 text-stone-400 hover:text-white hover:bg-white/10 rounded-full transition ml-1"
+                >
+                  &times;
+                </button>
+              </div>
             </div>
 
             <div className="p-6 sm:p-8 space-y-6 max-h-[80vh] overflow-y-auto">
@@ -832,6 +868,12 @@ export default function AdminPage() {
           </div>
         </div>
       )}
+      {/* Dedicated Loan Summary & Statement Export Modal */}
+      <LoanSummaryModal
+        app={summaryModalApp}
+        isOpen={Boolean(summaryModalApp)}
+        onClose={() => setSummaryModalApp(null)}
+      />
     </div>
   )
 }

@@ -411,3 +411,175 @@ export const respondToMoreInfo = async (req, res) => {
     return res.status(500).json({ success: false, message: error.message })
   }
 }
+
+// 8. Export Applicant Loan Summary as CSV via API
+export const exportApplicationCsv = async (req, res) => {
+  try {
+    const { id } = req.params
+    const application = await LoanApplication.findById(id)
+      .populate("applicantId", "name email phone")
+
+    if (!application) {
+      return res.status(404).json({ success: false, message: "Application not found" })
+    }
+
+    // Role check: Applicant can strictly only export their own
+    if (req.user.role === "applicant") {
+      const appApplicantId = (application.applicantId?._id || application.applicantId || "").toString()
+      const appEmail = (application.applicantId?.email || application.personalDetails?.email || "").toLowerCase().trim()
+      const userEmail = (req.user.email || "").toLowerCase().trim()
+
+      if (appApplicantId !== req.user.id && (!userEmail || appEmail !== userEmail)) {
+        return res.status(403).json({ success: false, message: "Access denied to this application" })
+      }
+    }
+
+    // Attempt to fetch repayment schedule if approved
+    const RepaymentSchedule = (await import("../models/RepaymentSchedule.js")).default
+    const schedule = await RepaymentSchedule.findOne({ applicationId: id })
+
+    const esc = (val) => {
+      if (val === null || val === undefined) return '""'
+      const str = String(val).replace(/"/g, '""')
+      return `"${str}"`
+    }
+
+    const rows = []
+    rows.push(["CORREM FINANCIAL PLATFORM", "LOAN APPLICATION & SANCTION SUMMARY"].map(esc).join(","))
+    rows.push(["Generated On", new Date().toLocaleString("en-IN")].map(esc).join(","))
+    rows.push(["Application Number", application.applicationNumber || "N/A"].map(esc).join(","))
+    rows.push(["Current Status", (application.status || "submitted").toUpperCase()].map(esc).join(","))
+    rows.push([])
+
+    // Applicant Profile
+    const pd = application.personalDetails || {}
+    rows.push(["--- APPLICANT PROFILE ---"].map(esc).join(","))
+    rows.push(["Full Name", pd.fullName || application.applicantId?.name || "N/A"].map(esc).join(","))
+    rows.push(["Email Address", pd.email || application.applicantId?.email || "N/A"].map(esc).join(","))
+    rows.push(["Contact Phone", pd.phone || application.applicantId?.phone || "N/A"].map(esc).join(","))
+    rows.push(["PAN Number", pd.panNumber || "N/A"].map(esc).join(","))
+    rows.push([])
+
+    // Loan Parameters
+    const ld = application.loanDetails || {}
+    rows.push(["--- LOAN TERMS & FINANCIALS ---"].map(esc).join(","))
+    rows.push(["Loan Type", (ld.loanType || "Personal").toUpperCase()].map(esc).join(","))
+    rows.push(["Principal Amount (INR)", ld.amount || 0].map(esc).join(","))
+    rows.push(["Tenure (Months)", ld.tenureMonths || 0].map(esc).join(","))
+    rows.push(["Interest Rate (%)", `${ld.interestRate || 0}%`].map(esc).join(","))
+    rows.push(["Monthly EMI (INR)", ld.monthlyEmiPreview || 0].map(esc).join(","))
+    rows.push([])
+
+    // Repayment Schedule
+    if (schedule && Array.isArray(schedule.installments) && schedule.installments.length > 0) {
+      rows.push(["--- REPAYMENT AMORTIZATION SCHEDULE ---"].map(esc).join(","))
+      rows.push(["Total Principal (INR)", schedule.totalPrincipal || ld.amount || 0].map(esc).join(","))
+      rows.push(["Total Interest (INR)", schedule.totalInterest || 0].map(esc).join(","))
+      rows.push(["Gross Amount Payable (INR)", schedule.totalAmountPayable || 0].map(esc).join(","))
+      rows.push([])
+      rows.push(["Installment #", "Due Date", "Monthly EMI (INR)", "Principal (INR)", "Interest (INR)", "Remaining (INR)", "Status"].map(esc).join(","))
+
+      schedule.installments.forEach((inst) => {
+        rows.push([
+          inst.installmentNumber,
+          inst.dueDate ? new Date(inst.dueDate).toLocaleDateString("en-IN") : "N/A",
+          inst.emiAmount ?? 0,
+          inst.principalComponent ?? 0,
+          inst.interestComponent ?? 0,
+          inst.remainingPrincipal ?? 0,
+          (inst.status || "pending").toUpperCase()
+        ].map(esc).join(","))
+      })
+    }
+
+    const csvData = "\uFEFF" + rows.join("\r\n")
+    res.setHeader("Content-Type", "text/csv; charset=utf-8")
+    res.setHeader("Content-Disposition", `attachment; filename="Loan_Summary_${application.applicationNumber || 'Application'}.csv"`)
+    return res.status(200).send(csvData)
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message })
+  }
+}
+
+// 9. Applicant Request Reconsideration (Appeal Rejected Loan Application)
+export const requestReconsideration = async (req, res) => {
+  try {
+    const { id } = req.params
+    const { appealStatement, adjustedAmount, adjustedTenure, additionalDocuments } = req.body
+
+    const application = await LoanApplication.findById(id)
+    if (!application) {
+      return res.status(404).json({ success: false, message: "Application not found" })
+    }
+
+    // Role check: Applicant can strictly only appeal their own application
+    if (req.user.role === "applicant") {
+      const appApplicantId = (application.applicantId?._id || application.applicantId || "").toString()
+      const appEmail = (application.personalDetails?.email || "").toLowerCase().trim()
+      const userEmail = (req.user.email || "").toLowerCase().trim()
+
+      if (appApplicantId !== req.user.id && (!userEmail || appEmail !== userEmail)) {
+        return res.status(403).json({ success: false, message: "Access denied to this application" })
+      }
+    }
+
+    if (application.status !== "rejected") {
+      return res.status(400).json({ success: false, message: "Reconsideration can only be requested for rejected applications" })
+    }
+
+    // Adjust loan terms if requested
+    if (adjustedAmount && Number(adjustedAmount) > 0) {
+      application.loanDetails.amount = Number(adjustedAmount)
+    }
+    if (adjustedTenure && Number(adjustedTenure) > 0) {
+      application.loanDetails.tenureMonths = Number(adjustedTenure)
+    }
+
+    // Recalculate monthly EMI preview if terms changed
+    if (application.loanDetails.amount && application.loanDetails.tenureMonths && application.loanDetails.interestRate) {
+      const P = application.loanDetails.amount
+      const r = (application.loanDetails.interestRate / 12) / 100
+      const n = application.loanDetails.tenureMonths
+      const emi = Math.round((P * r * Math.pow(1 + r, n)) / (Math.pow(1 + r, n) - 1))
+      application.loanDetails.monthlyEmiPreview = emi
+    }
+
+    // Attach reconsideration request details
+    application.reconsiderationRequest = {
+      appealStatement: appealStatement || "Applicant requested reconsideration with updated terms.",
+      requestedAt: new Date(),
+      adjustedAmount: adjustedAmount ? Number(adjustedAmount) : null,
+      adjustedTenure: adjustedTenure ? Number(adjustedTenure) : null,
+      additionalDocuments: additionalDocuments || []
+    }
+
+    // Append newly uploaded documents
+    if (Array.isArray(additionalDocuments) && additionalDocuments.length > 0) {
+      application.documents.push(...additionalDocuments)
+    }
+
+    // Return to under_review state so loan officer and admin can re-assess
+    const previousStatus = application.status
+    application.status = "under_review"
+    await application.save()
+
+    // Audit log
+    await AuditLog.create({
+      applicationId: application._id,
+      action: "RECONSIDERATION_REQUESTED",
+      fromStatus: previousStatus,
+      toStatus: "under_review",
+      performedBy: req.user.id,
+      userRole: req.user.role,
+      remarks: appealStatement || "Applicant requested reconsideration of rejected application."
+    })
+
+    return res.status(200).json({
+      success: true,
+      message: "Reconsideration appeal submitted successfully. Application returned to under review.",
+      application
+    })
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message })
+  }
+}
