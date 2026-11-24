@@ -1,11 +1,17 @@
-import { Routes, Route, Link } from 'react-router-dom'
+import { Routes, Route, Link, useLocation } from 'react-router-dom'
 import { Show, UserButton } from '@clerk/react'
 import SignInPage from './Pages/auth/SignInPage'
 import SignUpPage from './Pages/auth/SignUpPage'
 import LoginPage from './Pages/auth/LoginPage'
 import HomePage from './Pages/homePage'
+import OfficerPage from './Pages/officer/OfficerPage'
+import AdminPage from './Pages/admin/AdminPage'
+import ApplicantDashboard from './Pages/applicant/ApplicantDashboard'
+import ApplyLoanPage from './Pages/applicant/ApplyLoanPage'
 
 function App() {
+  const location = useLocation()
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans">
       {/* Top Navigation Bar */}
@@ -25,15 +31,55 @@ function App() {
             </div>
           </Link>
 
-          {/* Center Links */}
+          {/* Center Navigation Links */}
           <div className="hidden md:flex items-center gap-6 text-sm font-medium text-slate-600">
-            <Link to="/" className="hover:text-blue-600 transition">Home</Link>
-            <a href="/#calculator" className="hover:text-blue-600 transition">EMI Calculator</a>
-            <a href="/#workflow" className="hover:text-blue-600 transition">Credit Workflow</a>
+            <Link
+              to="/"
+              className={`hover:text-blue-600 transition ${location.pathname === '/' ? 'text-blue-600 font-semibold' : ''}`}
+            >
+              Home
+            </Link>
+            <Link
+              to="/applicant"
+              className={`hover:text-blue-600 transition flex items-center gap-1.5 ${
+                location.pathname.startsWith('/applicant') ? 'text-blue-600 font-semibold' : ''
+              }`}
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-indigo-500"></span>
+              Applicant Desk
+            </Link>
+            <Link
+              to="/officer"
+              className={`hover:text-blue-600 transition flex items-center gap-1.5 ${
+                location.pathname.startsWith('/officer') ? 'text-blue-600 font-semibold' : ''
+              }`}
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+              Officer Review
+            </Link>
+            <Link
+              to="/admin"
+              className={`hover:text-blue-600 transition flex items-center gap-1.5 ${
+                location.pathname.startsWith('/admin') ? 'text-blue-600 font-semibold' : ''
+              }`}
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+              Admin Portal
+            </Link>
+            <a href="/#calculator" className="hover:text-blue-600 transition">
+              EMI Calculator
+            </a>
           </div>
 
           {/* Auth Controls */}
           <div className="flex items-center gap-3">
+            <Link
+              to="/applicant/apply"
+              className="hidden sm:inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg transition"
+            >
+              Apply Loan
+            </Link>
+
             <Show when="signed-out">
               <Link
                 to="/sign-in"
@@ -68,6 +114,10 @@ function App() {
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <Routes>
           <Route path="/" element={<HomePage />} />
+          <Route path="/applicant" element={<ApplicantDashboard />} />
+          <Route path="/applicant/apply" element={<ApplyLoanPage />} />
+          <Route path="/officer/*" element={<OfficerPage />} />
+          <Route path="/admin/*" element={<AdminPage />} />
           <Route path="/sign-in/*" element={<SignInPage />} />
           <Route path="/sign-up/*" element={<SignUpPage />} />
           <Route path="/login/*" element={<LoginPage />} />

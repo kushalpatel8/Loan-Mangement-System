@@ -5,6 +5,9 @@
     "moduleResolution": "bundler",
     "jsx": "react-jsx",
     "allowJs": true,
+    "noEmit": true,
+    "isolatedModules": true,
+    "moduleDetection": "force",
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"]
