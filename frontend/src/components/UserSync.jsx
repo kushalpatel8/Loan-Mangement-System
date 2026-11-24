@@ -8,16 +8,32 @@ export default function UserSync({ onUserSynced }) {
   const { getToken } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
-  const syncedRef = useRef(false)
+  
+  const syncedUserIdRef = useRef(null)
+  const onUserSyncedRef = useRef(onUserSynced)
+  onUserSyncedRef.current = onUserSynced
 
   useEffect(() => {
     if (!isSignedIn || !user) return
+
+    // Prevent redundant sync loops: sync once per signed-in user ID
+    if (syncedUserIdRef.current === user.id) return
+    syncedUserIdRef.current = user.id
 
     const sync = async () => {
       try {
         const email = user.primaryEmailAddress?.emailAddress
         const name = user.fullName || user.firstName || email?.split('@')[0] || 'User'
         const imageUrl = user.imageUrl || ''
+
+        if (email) {
+          sessionStorage.setItem('lms_user_email', email)
+          localStorage.setItem('lms_user_email', email)
+        }
+        if (name) {
+          sessionStorage.setItem('lms_user_name', name)
+          localStorage.setItem('lms_user_name', name)
+        }
 
         const dbUser = await syncClerkUser({
           clerkId: user.id,
@@ -26,57 +42,52 @@ export default function UserSync({ onUserSynced }) {
           imageUrl
         })
 
-        syncedRef.current = true
-
         // Check if role was previously selected and cached in local/session storage
         const cachedRole = sessionStorage.getItem('lms_user_role') || localStorage.getItem('lms_user_role')
         const cachedRoleSelected =
           sessionStorage.getItem('lms_role_selected') === 'true' ||
           localStorage.getItem('lms_role_selected') === 'true'
 
-        const effectiveUser = dbUser || (cachedRoleSelected ? { role: cachedRole, roleSelected: true } : null)
+        // If user is already on applicant portal, ensure applicant role is set
+        const effectiveRole = dbUser?.role || cachedRole || 'applicant'
+        const effectiveRoleSelected = dbUser?.roleSelected ?? (cachedRoleSelected || location.pathname.startsWith('/applicant'))
 
-        if (onUserSynced && effectiveUser) {
-          onUserSynced(effectiveUser)
+        const effectiveUser = {
+          ...(dbUser || {}),
+          role: effectiveRole,
+          roleSelected: effectiveRoleSelected
         }
 
-        // If user has not permanently selected their role yet, redirect to /select-role
-        if (effectiveUser && !effectiveUser.roleSelected) {
-          sessionStorage.setItem('lms_role_selected', 'false')
+        sessionStorage.setItem('lms_role_selected', String(effectiveRoleSelected))
+        sessionStorage.setItem('lms_user_role', effectiveRole)
+        localStorage.setItem('lms_role_selected', String(effectiveRoleSelected))
+        localStorage.setItem('lms_user_role', effectiveRole)
+
+        if (onUserSyncedRef.current) {
+          onUserSyncedRef.current(effectiveUser)
+        }
+
+        // Only redirect to /select-role if user is not yet configured AND not already in an active workflow
+        if (!effectiveRoleSelected) {
           if (
             location.pathname !== '/select-role' &&
+            !location.pathname.startsWith('/applicant') &&
             !location.pathname.startsWith('/sign-in') &&
             !location.pathname.startsWith('/sign-up') &&
             !location.pathname.startsWith('/login')
           ) {
             navigate('/select-role', { replace: true })
           }
-        } else if (effectiveUser && effectiveUser.roleSelected) {
-          sessionStorage.setItem('lms_role_selected', 'true')
-          sessionStorage.setItem('lms_user_role', effectiveUser.role)
-          localStorage.setItem('lms_role_selected', 'true')
-          localStorage.setItem('lms_user_role', effectiveUser.role)
-
-          // If user lands on /select-role but already has a role locked, navigate to their workspace
+        } else {
+          // If user landed on /select-role but already has a role locked, navigate to their workspace
           if (location.pathname === '/select-role') {
             const dest =
-              effectiveUser.role === 'admin'
+              effectiveRole === 'admin'
                 ? '/admin'
-                : effectiveUser.role === 'loan_officer'
+                : effectiveRole === 'loan_officer'
                 ? '/officer'
                 : '/applicant'
             navigate(dest, { replace: true })
-          }
-        } else if (!dbUser && !cachedRoleSelected) {
-          // Backend offline and no local role set yet -> prompt role selection
-          if (
-            location.pathname !== '/select-role' &&
-            !location.pathname.startsWith('/sign-in') &&
-            !location.pathname.startsWith('/sign-up') &&
-            !location.pathname.startsWith('/login') &&
-            location.pathname !== '/'
-          ) {
-            navigate('/select-role', { replace: true })
           }
         }
       } catch (err) {
@@ -85,7 +96,7 @@ export default function UserSync({ onUserSynced }) {
     }
 
     sync()
-  }, [isSignedIn, user, getToken, location.pathname, navigate, onUserSynced])
+  }, [isSignedIn, user?.id])
 
   return null
 }

@@ -1,5 +1,6 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { useNavigate, useSearchParams, Link } from 'react-router-dom'
+import { useUser } from '@clerk/react'
 import {
   User,
   CreditCard,
@@ -19,7 +20,8 @@ import {
 import {
   saveDraftApplication,
   submitNewApplication,
-  getApplicationById
+  getApplicationById,
+  uploadDocumentFile
 } from '../../lib/loanWorkflowApi'
 
 const LOAN_TYPES = [
@@ -67,6 +69,7 @@ const LOAN_TYPES = [
 
 export default function ApplyLoanPage() {
   const navigate = useNavigate()
+  const { user } = useUser()
   const [searchParams] = useSearchParams()
   const resumeId = searchParams.get('resume')
 
@@ -80,6 +83,7 @@ export default function ApplyLoanPage() {
   // Step 1: Personal Details
   const [personalDetails, setPersonalDetails] = useState({
     fullName: '',
+    email: '',
     dateOfBirth: '',
     panNumber: '',
     phone: '',
@@ -91,6 +95,32 @@ export default function ApplyLoanPage() {
       country: 'India'
     }
   })
+
+  // Auto-fill user email and name if available ONCE on load
+  const hasInitializedRef = useRef(false)
+  useEffect(() => {
+    if (hasInitializedRef.current) return
+
+    const userEmail =
+      user?.primaryEmailAddress?.emailAddress ||
+      (typeof window !== 'undefined'
+        ? sessionStorage.getItem('lms_user_email') || localStorage.getItem('lms_user_email')
+        : '')
+    const userName =
+      user?.fullName ||
+      (typeof window !== 'undefined'
+        ? sessionStorage.getItem('lms_user_name') || localStorage.getItem('lms_user_name')
+        : '')
+
+    if (userEmail || userName) {
+      hasInitializedRef.current = true
+      setPersonalDetails((prev) => ({
+        ...prev,
+        fullName: prev.fullName || userName || '',
+        email: prev.email || userEmail || ''
+      }))
+    }
+  }, [user?.id, user?.primaryEmailAddress?.emailAddress, user?.fullName])
 
   // Step 2: Loan Details
   const [loanDetails, setLoanDetails] = useState({
@@ -178,10 +208,21 @@ export default function ApplyLoanPage() {
   const handleSaveDraft = async () => {
     setSavingDraft(true)
     try {
+      const activeEmail =
+        personalDetails.email ||
+        user?.primaryEmailAddress?.emailAddress ||
+        (typeof window !== 'undefined'
+          ? sessionStorage.getItem('lms_user_email') || localStorage.getItem('lms_user_email')
+          : '')
+
       const draft = await saveDraftApplication({
         _id: draftId,
         currentStep,
-        personalDetails,
+        applicantEmail: activeEmail,
+        personalDetails: {
+          ...personalDetails,
+          email: activeEmail
+        },
         loanDetails: {
           ...loanDetails,
           monthlyEmiPreview: monthlyEmi
@@ -206,9 +247,20 @@ export default function ApplyLoanPage() {
     e.preventDefault()
     setSubmitting(true)
     try {
+      const activeEmail =
+        personalDetails.email ||
+        user?.primaryEmailAddress?.emailAddress ||
+        (typeof window !== 'undefined'
+          ? sessionStorage.getItem('lms_user_email') || localStorage.getItem('lms_user_email')
+          : '')
+
       const application = await submitNewApplication({
         _id: draftId,
-        personalDetails,
+        applicantEmail: activeEmail,
+        personalDetails: {
+          ...personalDetails,
+          email: activeEmail
+        },
         loanDetails: {
           ...loanDetails,
           monthlyEmiPreview: monthlyEmi
@@ -224,7 +276,35 @@ export default function ApplyLoanPage() {
     }
   }
 
-  // File Upload Simulator
+  const [uploadingType, setUploadingType] = useState(null)
+
+  // Real File Upload Handler (PDF, JPEG, PNG)
+  const handleRealFileUpload = async (e, type) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    setUploadingType(type)
+    setStatusMessage(null)
+
+    try {
+      const uploadedDoc = await uploadDocumentFile(file, type)
+      setDocuments((prev) => [
+        ...prev.filter((d) => d.documentType !== type),
+        uploadedDoc
+      ])
+      setStatusMessage({
+        type: 'success',
+        text: `Document "${file.name}" uploaded successfully for ${type === 'id_proof' ? 'ID Proof' : 'Income Proof'}!`
+      })
+    } catch (err) {
+      setStatusMessage({ type: 'error', text: err.message || 'Failed to upload document' })
+    } finally {
+      setUploadingType(null)
+      e.target.value = ''
+    }
+  }
+
+  // Fallback simulator for quick demo
   const handleSimulateUpload = (type) => {
     const fileName = type === 'id_proof' ? 'Passport_Scan.pdf' : 'Bank_Statement_6Months.pdf'
     setDocuments((prev) => [
@@ -256,31 +336,31 @@ export default function ApplyLoanPage() {
   return (
     <div className="max-w-4xl mx-auto space-y-8">
       {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white border border-slate-200 p-6 rounded-2xl shadow-sm">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white border border-stone-200/80 p-6 sm:p-8 rounded-3xl shadow-md shadow-stone-200/40">
         <div>
-          <div className="inline-flex items-center gap-1.5 text-xs font-bold text-blue-600 uppercase tracking-wider mb-1">
-            <CreditCard className="w-4 h-4" />
-            Digital Credit Application Form
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold bg-amber-50/90 text-amber-900 border border-amber-200/80 mb-2 shadow-xs">
+            <span>🍃</span>
+            <span>Digital Credit Application</span>
           </div>
-          <h1 className="text-2xl font-extrabold text-slate-900">Apply for a New Loan</h1>
-          <p className="text-xs text-slate-500 mt-0.5">
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-[#3A1700] tracking-tight">Apply for a New Loan</h1>
+          <p className="text-xs sm:text-sm text-[#5C3D2E] mt-1 leading-relaxed">
             Complete the 4-step verified workflow with instant EMI preview and save-as-draft support.
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2.5">
           <button
             type="button"
             onClick={handleSaveDraft}
             disabled={savingDraft}
-            className="flex items-center gap-1.5 px-4 py-2 border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-xl transition cursor-pointer disabled:opacity-50"
+            className="flex items-center gap-1.5 px-4 py-2.5 border border-stone-200/90 bg-[#F8F5EE] hover:bg-[#F0ECE2] text-stone-800 text-xs font-semibold rounded-xl transition cursor-pointer disabled:opacity-50"
           >
-            <Save className="w-3.5 h-3.5" />
+            <Save className="w-3.5 h-3.5 text-amber-700" />
             {savingDraft ? 'Saving...' : 'Save Draft'}
           </button>
           <Link
             to="/applicant"
-            className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition"
+            className="px-4 py-2.5 bg-white hover:bg-stone-50 border border-stone-200 text-stone-700 text-xs font-semibold rounded-xl transition"
           >
             My Applications
           </Link>
@@ -289,11 +369,11 @@ export default function ApplyLoanPage() {
 
       {statusMessage && (
         <div
-          className={`p-4 rounded-xl text-xs sm:text-sm flex items-center gap-3 ${
+          className={`p-4 rounded-2xl text-xs sm:text-sm flex items-center gap-3 shadow-xs ${
             statusMessage.type === 'success'
               ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
               : statusMessage.type === 'info'
-              ? 'bg-blue-50 text-blue-800 border border-blue-200'
+              ? 'bg-amber-50 text-amber-900 border border-amber-200'
               : 'bg-rose-50 text-rose-800 border border-rose-200'
           }`}
         >
@@ -303,8 +383,8 @@ export default function ApplyLoanPage() {
       )}
 
       {/* Multi-Step Stepper Header */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="bg-white border border-stone-200/80 rounded-2xl p-5 shadow-sm">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
           {steps.map((s) => {
             const Icon = s.icon
             const isCompleted = currentStep > s.number
@@ -316,26 +396,26 @@ export default function ApplyLoanPage() {
                 onClick={() => setCurrentStep(s.number)}
                 className={`p-3 rounded-xl border text-left transition flex items-center gap-3 cursor-pointer ${
                   isCurrent
-                    ? 'border-blue-600 bg-blue-50/50'
+                    ? 'border-amber-500 bg-amber-50/60 shadow-xs ring-2 ring-amber-500/20'
                     : isCompleted
-                    ? 'border-emerald-200 bg-emerald-50/30'
-                    : 'border-slate-200 hover:border-slate-300'
+                    ? 'border-amber-200 bg-[#F8F5EE]'
+                    : 'border-stone-200 hover:border-stone-300 bg-white'
                 }`}
               >
                 <div
                   className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs flex-shrink-0 ${
                     isCurrent
-                      ? 'bg-blue-600 text-white shadow-sm'
+                      ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-sm'
                       : isCompleted
-                      ? 'bg-emerald-600 text-white'
-                      : 'bg-slate-100 text-slate-500'
+                      ? 'bg-amber-600 text-white'
+                      : 'bg-stone-100 text-stone-500'
                   }`}
                 >
                   {isCompleted ? <CheckCircle2 className="w-4 h-4" /> : s.number}
                 </div>
                 <div className="overflow-hidden">
-                  <span className="text-[10px] uppercase font-bold text-slate-400 block">Step {s.number}</span>
-                  <span className="text-xs font-bold text-slate-800 truncate block">{s.title}</span>
+                  <span className="text-[10px] uppercase font-bold text-stone-400 block">Step {s.number}</span>
+                  <span className="text-xs font-bold text-stone-800 truncate block">{s.title}</span>
                 </div>
               </button>
             )
@@ -344,43 +424,55 @@ export default function ApplyLoanPage() {
       </div>
 
       {/* Step Form Body */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-6 sm:p-8 shadow-sm">
+      <div className="bg-white border border-stone-200/80 rounded-3xl p-6 sm:p-8 shadow-md shadow-stone-200/40">
         {/* STEP 1: PERSONAL DETAILS */}
         {currentStep === 1 && (
           <div className="space-y-6">
-            <div className="border-b border-slate-100 pb-4">
-              <h2 className="text-lg font-bold text-slate-900">Step 1: Personal Details</h2>
-              <p className="text-xs text-slate-500 mt-0.5">
+            <div className="border-b border-stone-100 pb-4">
+              <h2 className="text-lg font-bold text-[#3A1700]">Step 1: Personal Details</h2>
+              <p className="text-xs text-stone-500 mt-0.5">
                 Provide your identification information matching your government ID.
               </p>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
               <div className="space-y-1">
-                <label className="font-semibold text-slate-700">Full Legal Name *</label>
+                <label className="font-semibold text-stone-700">Full Legal Name *</label>
                 <input
                   type="text"
                   required
                   placeholder="e.g. Kushal Patel"
                   value={personalDetails.fullName}
                   onChange={(e) => setPersonalDetails({ ...personalDetails, fullName: e.target.value })}
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                  className="w-full p-2.5 bg-stone-50 border border-stone-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
                 />
               </div>
 
               <div className="space-y-1">
-                <label className="font-semibold text-slate-700">Date of Birth *</label>
+                <label className="font-semibold text-stone-700">Email Address *</label>
+                <input
+                  type="email"
+                  required
+                  placeholder="e.g. kushal@example.com"
+                  value={personalDetails.email || ''}
+                  onChange={(e) => setPersonalDetails({ ...personalDetails, email: e.target.value })}
+                  className="w-full p-2.5 bg-stone-50 border border-stone-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-semibold text-stone-700">Date of Birth *</label>
                 <input
                   type="date"
                   required
                   value={personalDetails.dateOfBirth}
                   onChange={(e) => setPersonalDetails({ ...personalDetails, dateOfBirth: e.target.value })}
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                  className="w-full p-2.5 bg-stone-50 border border-stone-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
                 />
               </div>
 
               <div className="space-y-1">
-                <label className="font-semibold text-slate-700">PAN Card / Tax ID Number *</label>
+                <label className="font-semibold text-stone-700">PAN Card / Tax ID Number *</label>
                 <input
                   type="text"
                   required
@@ -388,25 +480,25 @@ export default function ApplyLoanPage() {
                   placeholder="e.g. ABCDE1234F"
                   value={personalDetails.panNumber}
                   onChange={(e) => setPersonalDetails({ ...personalDetails, panNumber: e.target.value.toUpperCase() })}
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white uppercase font-mono tracking-wider focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                  className="w-full p-2.5 bg-stone-50 border border-stone-200 rounded-xl focus:bg-white uppercase font-mono tracking-wider focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
                 />
-                <span className="text-[10px] text-slate-400">Standard Indian 10-digit PAN format</span>
+                <span className="text-[10px] text-stone-400">Standard Indian 10-digit PAN format</span>
               </div>
 
               <div className="space-y-1">
-                <label className="font-semibold text-slate-700">Contact Phone Number *</label>
+                <label className="font-semibold text-stone-700">Contact Phone Number *</label>
                 <input
                   type="tel"
                   required
                   placeholder="e.g. +91 98765 43210"
                   value={personalDetails.phone}
                   onChange={(e) => setPersonalDetails({ ...personalDetails, phone: e.target.value })}
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                  className="w-full p-2.5 bg-stone-50 border border-stone-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
                 />
               </div>
 
               <div className="sm:col-span-2 space-y-1 pt-2">
-                <label className="font-semibold text-slate-700">Residential Street Address *</label>
+                <label className="font-semibold text-stone-700">Residential Street Address *</label>
                 <input
                   type="text"
                   required
@@ -418,12 +510,12 @@ export default function ApplyLoanPage() {
                       address: { ...personalDetails.address, street: e.target.value }
                     })
                   }
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                  className="w-full p-2.5 bg-stone-50 border border-stone-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
                 />
               </div>
 
               <div className="space-y-1">
-                <label className="font-semibold text-slate-700">City *</label>
+                <label className="font-semibold text-stone-700">City *</label>
                 <input
                   type="text"
                   required
@@ -435,12 +527,12 @@ export default function ApplyLoanPage() {
                       address: { ...personalDetails.address, city: e.target.value }
                     })
                   }
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                  className="w-full p-2.5 bg-stone-50 border border-stone-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
                 />
               </div>
 
               <div className="space-y-1">
-                <label className="font-semibold text-slate-700">State *</label>
+                <label className="font-semibold text-stone-700">State *</label>
                 <input
                   type="text"
                   required
@@ -452,12 +544,12 @@ export default function ApplyLoanPage() {
                       address: { ...personalDetails.address, state: e.target.value }
                     })
                   }
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                  className="w-full p-2.5 bg-stone-50 border border-stone-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
                 />
               </div>
 
               <div className="space-y-1">
-                <label className="font-semibold text-slate-700">Postal / PIN Code *</label>
+                <label className="font-semibold text-stone-700">Postal / PIN Code *</label>
                 <input
                   type="text"
                   required
@@ -469,33 +561,33 @@ export default function ApplyLoanPage() {
                       address: { ...personalDetails.address, postalCode: e.target.value }
                     })
                   }
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                  className="w-full p-2.5 bg-stone-50 border border-stone-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
                 />
               </div>
 
               <div className="space-y-1">
-                <label className="font-semibold text-slate-700">Country</label>
+                <label className="font-semibold text-stone-700">Country</label>
                 <input
                   type="text"
                   disabled
                   value="India"
-                  className="w-full p-2.5 bg-slate-100 border border-slate-200 rounded-xl text-slate-500"
+                  className="w-full p-2.5 bg-stone-100 border border-stone-200 rounded-xl text-stone-500"
                 />
               </div>
             </div>
 
-            <div className="flex justify-between pt-6 border-t border-slate-100">
+            <div className="flex justify-between pt-6 border-t border-stone-100">
               <button
                 type="button"
                 onClick={handleSaveDraft}
-                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl"
+                className="px-4 py-2 text-xs font-semibold text-stone-700 bg-[#F8F5EE] hover:bg-[#F0ECE2] border border-stone-200/90 rounded-xl cursor-pointer"
               >
                 Save as Draft
               </button>
               <button
                 type="button"
                 onClick={() => setCurrentStep(2)}
-                className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-md shadow-blue-600/20"
+                className="px-6 py-2.5 bg-gradient-to-r from-amber-500 via-amber-600 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-lg shadow-orange-500/25 cursor-pointer active:scale-95"
               >
                 Proceed to Loan Details <ChevronRight className="w-4 h-4" />
               </button>
@@ -506,16 +598,16 @@ export default function ApplyLoanPage() {
         {/* STEP 2: LOAN DETAILS & AUTO-CALCULATED EMI PREVIEW */}
         {currentStep === 2 && (
           <div className="space-y-6">
-            <div className="border-b border-slate-100 pb-4">
-              <h2 className="text-lg font-bold text-slate-900">Step 2: Loan Details &amp; Auto-Calculated EMI</h2>
-              <p className="text-xs text-slate-500 mt-0.5">
+            <div className="border-b border-stone-100 pb-4">
+              <h2 className="text-lg font-bold text-[#3A1700]">Step 2: Loan Details &amp; Auto-Calculated EMI</h2>
+              <p className="text-xs text-stone-500 mt-0.5">
                 Select your financing type, specify tenure and amount, and inspect your real-time monthly repayment preview.
               </p>
             </div>
 
             {/* Loan Type Selection Cards */}
             <div className="space-y-2">
-              <label className="text-xs font-bold text-slate-700 uppercase tracking-wide">Select Loan Category</label>
+              <label className="text-xs font-bold text-stone-700 uppercase tracking-wide">Select Loan Category</label>
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
                 {LOAN_TYPES.map((t) => {
                   const isSelected = loanDetails.loanType === t.id
@@ -524,22 +616,22 @@ export default function ApplyLoanPage() {
                       key={t.id}
                       type="button"
                       onClick={() => handleSelectLoanType(t)}
-                      className={`p-3.5 rounded-xl border-2 text-left transition cursor-pointer flex flex-col justify-between ${
+                      className={`p-4 rounded-2xl border-2 text-left transition cursor-pointer flex flex-col justify-between ${
                         isSelected
-                          ? 'border-blue-600 bg-blue-50/60 shadow-sm'
-                          : 'border-slate-200 hover:border-slate-300'
+                          ? 'border-amber-500 bg-white shadow-xl shadow-amber-500/10 ring-2 ring-amber-500/20'
+                          : 'border-stone-200/80 bg-white/80 hover:border-stone-300 hover:bg-white hover:shadow-sm'
                       }`}
                     >
                       <div>
-                        <div className="flex justify-between items-center mb-1">
-                          <span className="font-bold text-xs text-slate-900">{t.name}</span>
-                          <span className="text-[10px] font-extrabold px-1.5 py-0.5 rounded bg-blue-100 text-blue-700">
+                        <div className="flex justify-between items-center mb-1.5">
+                          <span className="font-bold text-xs text-[#3A1700]">{t.name}</span>
+                          <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-200">
                             {t.rate}%
                           </span>
                         </div>
-                        <p className="text-[10px] text-slate-500 leading-relaxed">{t.description}</p>
+                        <p className="text-[10px] text-stone-600 leading-relaxed">{t.description}</p>
                       </div>
-                      <span className="text-[10px] text-slate-400 mt-2 block">
+                      <span className="text-[10px] text-stone-400 mt-2 block font-medium">
                         Tenure up to {t.maxTenure} mos
                       </span>
                     </button>
@@ -551,10 +643,10 @@ export default function ApplyLoanPage() {
             {/* Sliders & Numerical Inputs */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
               {/* Amount Slider */}
-              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
+              <div className="p-5 rounded-2xl bg-[#FFFDF9] border border-stone-200/80 space-y-3">
                 <div className="flex justify-between items-center text-xs">
-                  <span className="font-bold text-slate-700">Principal Requested</span>
-                  <span className="font-bold text-blue-700 text-sm">
+                  <span className="font-bold text-stone-700">Principal Requested</span>
+                  <span className="font-extrabold text-[#3A1700] text-sm">
                     ₹{Number(loanDetails.amount).toLocaleString('en-IN')}
                   </span>
                 </div>
@@ -565,19 +657,19 @@ export default function ApplyLoanPage() {
                   step={25000}
                   value={loanDetails.amount}
                   onChange={(e) => setLoanDetails({ ...loanDetails, amount: Number(e.target.value) })}
-                  className="w-full h-2 bg-slate-200 rounded-lg cursor-pointer accent-blue-600"
+                  className="w-full h-2 bg-stone-200 rounded-lg cursor-pointer accent-amber-600"
                 />
-                <div className="flex justify-between text-[10px] text-slate-400">
+                <div className="flex justify-between text-[10px] text-stone-400">
                   <span>₹50,000</span>
                   <span>₹50,00,000</span>
                 </div>
               </div>
 
               {/* Tenure Slider */}
-              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
+              <div className="p-5 rounded-2xl bg-[#FFFDF9] border border-stone-200/80 space-y-3">
                 <div className="flex justify-between items-center text-xs">
-                  <span className="font-bold text-slate-700">Repayment Tenure</span>
-                  <span className="font-bold text-blue-700 text-sm">
+                  <span className="font-bold text-stone-700">Repayment Tenure</span>
+                  <span className="font-extrabold text-[#3A1700] text-sm">
                     {loanDetails.tenureMonths} Months ({((loanDetails.tenureMonths || 12) / 12).toFixed(1)} yrs)
                   </span>
                 </div>
@@ -588,9 +680,9 @@ export default function ApplyLoanPage() {
                   step={6}
                   value={loanDetails.tenureMonths}
                   onChange={(e) => setLoanDetails({ ...loanDetails, tenureMonths: Number(e.target.value) })}
-                  className="w-full h-2 bg-slate-200 rounded-lg cursor-pointer accent-blue-600"
+                  className="w-full h-2 bg-stone-200 rounded-lg cursor-pointer accent-amber-600"
                 />
-                <div className="flex justify-between text-[10px] text-slate-400">
+                <div className="flex justify-between text-[10px] text-stone-400">
                   <span>12 mos</span>
                   <span>120 mos</span>
                 </div>
@@ -599,64 +691,64 @@ export default function ApplyLoanPage() {
 
             {/* Loan Purpose */}
             <div className="space-y-1 text-xs">
-              <label className="font-semibold text-slate-700">Purpose of Loan *</label>
+              <label className="font-semibold text-stone-700">Purpose of Loan *</label>
               <textarea
                 rows={2}
                 placeholder="Briefly state what the borrowed capital will be used for..."
                 value={loanDetails.purpose}
                 onChange={(e) => setLoanDetails({ ...loanDetails, purpose: e.target.value })}
-                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                className="w-full p-2.5 bg-stone-50 border border-stone-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
               />
             </div>
 
-            {/* Live Auto-Calculated EMI Preview Card */}
-            <div className="bg-slate-900 text-white rounded-2xl p-5 sm:p-6 shadow-md flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            {/* Live Auto-Calculated EMI Preview Card matching Home Page aesthetic */}
+            <div className="bg-gradient-to-br from-[#2E1810] to-[#1E0F0A] text-white rounded-3xl p-6 shadow-xl border border-amber-900/30 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
               <div>
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-                  <Calculator className="w-3.5 h-3.5 text-emerald-400" />
+                <span className="text-[10px] font-bold uppercase tracking-wider text-amber-300/80 flex items-center gap-1.5">
+                  <Calculator className="w-3.5 h-3.5 text-amber-300" />
                   Auto-Calculated Amortization Preview
                 </span>
-                <div className="text-3xl font-extrabold text-emerald-400 mt-1">
+                <div className="text-3xl font-black text-white mt-1">
                   ₹{monthlyEmi.toLocaleString('en-IN')}
-                  <span className="text-xs font-normal text-slate-300"> / month</span>
+                  <span className="text-xs font-normal text-stone-300"> / month</span>
                 </div>
-                <p className="text-xs text-slate-400 mt-1">
+                <p className="text-xs text-stone-400 mt-1">
                   Benchmark rate: {loanDetails.interestRate}% p.a. &bull; Tenure: {loanDetails.tenureMonths} months
                 </p>
               </div>
 
-              <div className="text-left sm:text-right text-xs space-y-1 border-t sm:border-t-0 sm:border-l border-slate-800 pt-3 sm:pt-0 sm:pl-6 w-full sm:w-auto">
+              <div className="text-left sm:text-right text-xs space-y-1.5 border-t sm:border-t-0 sm:border-l border-white/10 pt-3 sm:pt-0 sm:pl-6 w-full sm:w-auto">
                 <div>
-                  <span className="text-slate-400">Total Interest: </span>
-                  <span className="font-bold text-amber-400">₹{totalInterest.toLocaleString('en-IN')}</span>
+                  <span className="text-stone-300">Total Interest: </span>
+                  <span className="font-bold text-amber-300">₹{totalInterest.toLocaleString('en-IN')}</span>
                 </div>
                 <div>
-                  <span className="text-slate-400">Total Repayment: </span>
-                  <span className="font-bold text-white">₹{totalAmount.toLocaleString('en-IN')}</span>
+                  <span className="text-stone-300">Total Repayment: </span>
+                  <span className="font-extrabold text-white text-sm">₹{totalAmount.toLocaleString('en-IN')}</span>
                 </div>
               </div>
             </div>
 
-            <div className="flex justify-between pt-6 border-t border-slate-100">
+            <div className="flex justify-between pt-6 border-t border-stone-100">
               <button
                 type="button"
                 onClick={() => setCurrentStep(1)}
-                className="px-4 py-2 border border-slate-200 text-xs font-semibold text-slate-600 rounded-xl hover:bg-slate-50"
+                className="px-4 py-2 border border-stone-200/90 text-xs font-semibold text-stone-700 bg-[#F8F5EE] hover:bg-[#F0ECE2] rounded-xl cursor-pointer"
               >
                 Back to Step 1
               </button>
-              <div className="flex gap-2">
+              <div className="flex gap-2.5">
                 <button
                   type="button"
                   onClick={handleSaveDraft}
-                  className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl"
+                  className="px-4 py-2 text-xs font-semibold text-stone-700 bg-white hover:bg-stone-50 border border-stone-200 rounded-xl cursor-pointer"
                 >
                   Save as Draft
                 </button>
                 <button
                   type="button"
                   onClick={() => setCurrentStep(3)}
-                  className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-md shadow-blue-600/20"
+                  className="px-6 py-2.5 bg-gradient-to-r from-amber-500 via-amber-600 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-lg shadow-orange-500/25 cursor-pointer active:scale-95"
                 >
                   Proceed to Income Details <ChevronRight className="w-4 h-4" />
                 </button>
@@ -668,16 +760,16 @@ export default function ApplyLoanPage() {
         {/* STEP 3: INCOME DETAILS */}
         {currentStep === 3 && (
           <div className="space-y-6">
-            <div className="border-b border-slate-100 pb-4">
-              <h2 className="text-lg font-bold text-slate-900">Step 3: Income &amp; Employment Details</h2>
-              <p className="text-xs text-slate-500 mt-0.5">
+            <div className="border-b border-stone-100 pb-4">
+              <h2 className="text-lg font-bold text-[#3A1700]">Step 3: Income &amp; Employment Details</h2>
+              <p className="text-xs text-stone-500 mt-0.5">
                 Our rule-based eligibility engine uses these metrics to evaluate Debt-to-Income (DTI) compliance.
               </p>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
               <div className="space-y-1">
-                <label className="font-semibold text-slate-700">Gross Monthly Income (₹) *</label>
+                <label className="font-semibold text-stone-700">Gross Monthly Income (₹) *</label>
                 <input
                   type="number"
                   min={10000}
@@ -686,16 +778,16 @@ export default function ApplyLoanPage() {
                   placeholder="e.g. 65000"
                   value={incomeDetails.monthlyIncome}
                   onChange={(e) => setIncomeDetails({ ...incomeDetails, monthlyIncome: Number(e.target.value) })}
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 font-bold"
+                  className="w-full p-2.5 bg-stone-50 border border-stone-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 font-bold"
                 />
               </div>
 
               <div className="space-y-1">
-                <label className="font-semibold text-slate-700">Employment Category *</label>
+                <label className="font-semibold text-stone-700">Employment Category *</label>
                 <select
                   value={incomeDetails.employmentType}
                   onChange={(e) => setIncomeDetails({ ...incomeDetails, employmentType: e.target.value })}
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none"
+                  className="w-full p-2.5 bg-stone-50 border border-stone-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
                 >
                   <option value="salaried">Salaried Professional</option>
                   <option value="self_employed">Self Employed Individual</option>
@@ -705,19 +797,19 @@ export default function ApplyLoanPage() {
               </div>
 
               <div className="space-y-1">
-                <label className="font-semibold text-slate-700">Employer / Business Name *</label>
+                <label className="font-semibold text-stone-700">Employer / Business Name *</label>
                 <input
                   type="text"
                   required
                   placeholder="e.g. Tata Consultancy Services"
                   value={incomeDetails.employerName}
                   onChange={(e) => setIncomeDetails({ ...incomeDetails, employerName: e.target.value })}
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                  className="w-full p-2.5 bg-stone-50 border border-stone-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
                 />
               </div>
 
               <div className="space-y-1">
-                <label className="font-semibold text-slate-700">Existing Monthly Loan EMIs (₹)</label>
+                <label className="font-semibold text-stone-700">Existing Monthly Loan EMIs (₹)</label>
                 <input
                   type="number"
                   min={0}
@@ -725,7 +817,7 @@ export default function ApplyLoanPage() {
                   placeholder="e.g. 5000"
                   value={incomeDetails.existingMonthlyEmi}
                   onChange={(e) => setIncomeDetails({ ...incomeDetails, existingMonthlyEmi: Number(e.target.value) })}
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                  className="w-full p-2.5 bg-stone-50 border border-stone-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
                 />
               </div>
             </div>
@@ -739,10 +831,10 @@ export default function ApplyLoanPage() {
 
               return (
                 <div
-                  className={`p-4 rounded-xl border flex items-center justify-between text-xs ${
+                  className={`p-4 rounded-2xl border flex items-center justify-between text-xs ${
                     isSafe
                       ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
-                      : 'bg-amber-50 border-amber-200 text-amber-800'
+                      : 'bg-amber-50 border-amber-200 text-amber-900'
                   }`}
                 >
                   <div className="flex items-center gap-2">
@@ -756,33 +848,33 @@ export default function ApplyLoanPage() {
                       </p>
                     </div>
                   </div>
-                  <span className="font-bold text-xs px-2.5 py-1 rounded bg-white border">
+                  <span className="font-bold text-xs px-3 py-1 rounded-full bg-white border border-stone-200 shadow-2xs">
                     {isSafe ? 'Compliant' : 'High DTI'}
                   </span>
                 </div>
               )
             })()}
 
-            <div className="flex justify-between pt-6 border-t border-slate-100">
+            <div className="flex justify-between pt-6 border-t border-stone-100">
               <button
                 type="button"
                 onClick={() => setCurrentStep(2)}
-                className="px-4 py-2 border border-slate-200 text-xs font-semibold text-slate-600 rounded-xl hover:bg-slate-50"
+                className="px-4 py-2 border border-stone-200/90 text-xs font-semibold text-stone-700 bg-[#F8F5EE] hover:bg-[#F0ECE2] rounded-xl cursor-pointer"
               >
                 Back to Step 2
               </button>
-              <div className="flex gap-2">
+              <div className="flex gap-2.5">
                 <button
                   type="button"
                   onClick={handleSaveDraft}
-                  className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl"
+                  className="px-4 py-2 text-xs font-semibold text-stone-700 bg-white hover:bg-stone-50 border border-stone-200 rounded-xl cursor-pointer"
                 >
                   Save as Draft
                 </button>
                 <button
                   type="button"
                   onClick={() => setCurrentStep(4)}
-                  className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-md shadow-blue-600/20"
+                  className="px-6 py-2.5 bg-gradient-to-r from-amber-500 via-amber-600 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-lg shadow-orange-500/25 cursor-pointer active:scale-95"
                 >
                   Proceed to Documents <ChevronRight className="w-4 h-4" />
                 </button>
@@ -794,9 +886,9 @@ export default function ApplyLoanPage() {
         {/* STEP 4: DOCUMENT UPLOAD & SUBMISSION PREVIEW */}
         {currentStep === 4 && (
           <div className="space-y-6">
-            <div className="border-b border-slate-100 pb-4">
-              <h2 className="text-lg font-bold text-slate-900">Step 4: Document Verification &amp; Final Submission</h2>
-              <p className="text-xs text-slate-500 mt-0.5">
+            <div className="border-b border-stone-100 pb-4">
+              <h2 className="text-lg font-bold text-[#3A1700]">Step 4: Document Verification &amp; Final Submission</h2>
+              <p className="text-xs text-stone-500 mt-0.5">
                 Upload your identification and income proofs (PDF, JPEG, or PNG, max 10MB each).
               </p>
             </div>
@@ -804,70 +896,82 @@ export default function ApplyLoanPage() {
             {/* Document Upload Sections */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {/* ID Proof Box */}
-              <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-2">
+              <div className="p-5 rounded-2xl border border-stone-200 bg-[#FFFDF9] space-y-2.5">
                 <div className="flex justify-between items-center text-xs">
-                  <span className="font-bold text-slate-800">1. Identity Proof (Mandatory)</span>
-                  <span className="text-[10px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded font-bold">
+                  <span className="font-bold text-[#3A1700]">1. Identity Proof (Mandatory)</span>
+                  <span className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold ${
+                    documents.some((d) => d.documentType === 'id_proof')
+                      ? 'text-emerald-800 bg-emerald-100 border border-emerald-300'
+                      : 'text-amber-800 bg-amber-100 border border-amber-300'
+                  }`}>
                     {documents.some((d) => d.documentType === 'id_proof') ? 'Uploaded' : 'Missing'}
                   </span>
                 </div>
-                <p className="text-[11px] text-slate-500">
-                  Government issued PAN Card, Aadhaar Card, or Passport.
+                <p className="text-[11px] text-stone-500 leading-relaxed">
+                  Government issued PAN Card, Aadhaar Card, or Passport. (PDF, JPG, PNG)
                 </p>
                 <div className="pt-2">
-                  <button
-                    type="button"
-                    onClick={() => handleSimulateUpload('id_proof')}
-                    className="w-full py-2 bg-white border border-slate-300 hover:bg-slate-100 rounded-lg text-xs font-semibold text-slate-700 transition flex items-center justify-center gap-1.5"
-                  >
-                    <Upload className="w-3.5 h-3.5" />
-                    Attach / Replace ID Proof
-                  </button>
+                  <label className="w-full py-2.5 px-3 bg-white border border-stone-300 hover:bg-stone-50 rounded-xl text-xs font-semibold text-stone-800 transition flex items-center justify-center gap-2 cursor-pointer shadow-xs">
+                    <Upload className="w-3.5 h-3.5 text-amber-600" />
+                    <span>{uploadingType === 'id_proof' ? 'Uploading...' : 'Choose File to Upload'}</span>
+                    <input
+                      type="file"
+                      accept=".pdf,.jpg,.jpeg,.png,.webp"
+                      onChange={(e) => handleRealFileUpload(e, 'id_proof')}
+                      className="hidden"
+                    />
+                  </label>
                 </div>
               </div>
 
               {/* Income Proof Box */}
-              <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-2">
+              <div className="p-5 rounded-2xl border border-stone-200 bg-[#FFFDF9] space-y-2.5">
                 <div className="flex justify-between items-center text-xs">
-                  <span className="font-bold text-slate-800">2. Income Proof (Mandatory)</span>
-                  <span className="text-[10px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded font-bold">
+                  <span className="font-bold text-[#3A1700]">2. Income Proof (Mandatory)</span>
+                  <span className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold ${
+                    documents.some((d) => d.documentType === 'income_proof')
+                      ? 'text-emerald-800 bg-emerald-100 border border-emerald-300'
+                      : 'text-amber-800 bg-amber-100 border border-amber-300'
+                  }`}>
                     {documents.some((d) => d.documentType === 'income_proof') ? 'Uploaded' : 'Missing'}
                   </span>
                 </div>
-                <p className="text-[11px] text-slate-500">
-                  Last 3 months salary slips, ITR acknowledgment, or Form 16.
+                <p className="text-[11px] text-stone-500 leading-relaxed">
+                  Last 3 months salary slips, ITR acknowledgment, or Form 16. (PDF, JPG, PNG)
                 </p>
                 <div className="pt-2">
-                  <button
-                    type="button"
-                    onClick={() => handleSimulateUpload('income_proof')}
-                    className="w-full py-2 bg-white border border-slate-300 hover:bg-slate-100 rounded-lg text-xs font-semibold text-slate-700 transition flex items-center justify-center gap-1.5"
-                  >
-                    <Upload className="w-3.5 h-3.5" />
-                    Attach / Replace Income Proof
-                  </button>
+                  <label className="w-full py-2.5 px-3 bg-white border border-stone-300 hover:bg-stone-50 rounded-xl text-xs font-semibold text-stone-800 transition flex items-center justify-center gap-2 cursor-pointer shadow-xs">
+                    <Upload className="w-3.5 h-3.5 text-amber-600" />
+                    <span>{uploadingType === 'income_proof' ? 'Uploading...' : 'Choose File to Upload'}</span>
+                    <input
+                      type="file"
+                      accept=".pdf,.jpg,.jpeg,.png,.webp"
+                      onChange={(e) => handleRealFileUpload(e, 'income_proof')}
+                      className="hidden"
+                    />
+                  </label>
                 </div>
               </div>
             </div>
 
             {/* List of Attached Documents */}
             <div className="space-y-2">
-              <span className="text-xs font-bold text-slate-700 uppercase tracking-wide">
+              <span className="text-xs font-bold text-stone-700 uppercase tracking-wide">
                 Attached Files ({documents.length})
               </span>
-              <div className="divide-y divide-slate-100 border border-slate-200 rounded-xl overflow-hidden">
+              <div className="divide-y divide-stone-100 border border-stone-200 rounded-2xl overflow-hidden bg-[#FFFDF9]">
                 {documents.map((doc, idx) => (
-                  <div key={idx} className="p-3 bg-slate-50/40 flex justify-between items-center text-xs">
+                  <div key={idx} className="p-3.5 flex justify-between items-center text-xs">
                     <div className="flex items-center gap-2.5">
                       <FileCheck className="w-4 h-4 text-emerald-600 flex-shrink-0" />
                       <div>
-                        <span className="font-semibold text-slate-800 block">{doc.fileName}</span>
-                        <span className="text-[10px] text-slate-400 uppercase">
+                        <span className="font-bold text-[#3A1700] block">{doc.fileName}</span>
+                        <span className="text-[10px] text-stone-400 uppercase font-medium">
                           {doc.documentType.replace('_', ' ')} &bull; {(doc.fileSize / 1024 / 1024).toFixed(1)} MB
                         </span>
                       </div>
                     </div>
-                    <span className="text-emerald-600 font-bold text-[10px] bg-emerald-50 px-2 py-0.5 rounded">
+                    <span className="text-emerald-700 font-bold text-[10px] bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full">
                       Ready
                     </span>
                   </div>
@@ -876,43 +980,43 @@ export default function ApplyLoanPage() {
             </div>
 
             {/* Pre-submission Summary Review */}
-            <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-xs space-y-2">
-              <span className="font-bold text-slate-800 uppercase tracking-wide block">Application Summary</span>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <div className="p-5 rounded-2xl bg-[#FFFDF9] border border-stone-200 text-xs space-y-2">
+              <span className="font-bold text-[#3A1700] uppercase tracking-wide block">Application Summary</span>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div>
-                  <span className="text-slate-500">Applicant:</span>
-                  <p className="font-semibold text-slate-800">{personalDetails.fullName || 'N/A'}</p>
+                  <span className="text-stone-500">Applicant:</span>
+                  <p className="font-bold text-stone-900 mt-0.5">{personalDetails.fullName || 'N/A'}</p>
                 </div>
                 <div>
-                  <span className="text-slate-500">Loan:</span>
-                  <p className="font-semibold text-slate-800 uppercase">
+                  <span className="text-stone-500">Loan:</span>
+                  <p className="font-bold text-stone-900 uppercase mt-0.5">
                     ₹{Number(loanDetails.amount).toLocaleString('en-IN')} ({loanDetails.loanType})
                   </p>
                 </div>
                 <div>
-                  <span className="text-slate-500">Monthly EMI:</span>
-                  <p className="font-bold text-emerald-700">₹{monthlyEmi.toLocaleString('en-IN')}/mo</p>
+                  <span className="text-stone-500">Monthly EMI:</span>
+                  <p className="font-extrabold text-amber-700 mt-0.5">₹{monthlyEmi.toLocaleString('en-IN')}/mo</p>
                 </div>
                 <div>
-                  <span className="text-slate-500">Income:</span>
-                  <p className="font-semibold text-slate-800">₹{Number(incomeDetails.monthlyIncome).toLocaleString('en-IN')}/mo</p>
+                  <span className="text-stone-500">Income:</span>
+                  <p className="font-bold text-stone-900 mt-0.5">₹{Number(incomeDetails.monthlyIncome).toLocaleString('en-IN')}/mo</p>
                 </div>
               </div>
             </div>
 
-            <div className="flex justify-between pt-6 border-t border-slate-100">
+            <div className="flex justify-between pt-6 border-t border-stone-100">
               <button
                 type="button"
                 onClick={() => setCurrentStep(3)}
-                className="px-4 py-2 border border-slate-200 text-xs font-semibold text-slate-600 rounded-xl hover:bg-slate-50"
+                className="px-4 py-2 border border-stone-200 text-xs font-semibold text-stone-700 bg-[#F8F5EE] hover:bg-[#F0ECE2] rounded-xl cursor-pointer"
               >
                 Back to Step 3
               </button>
-              <div className="flex gap-2">
+              <div className="flex gap-2.5">
                 <button
                   type="button"
                   onClick={handleSaveDraft}
-                  className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl"
+                  className="px-4 py-2 text-xs font-semibold text-stone-700 bg-white hover:bg-stone-50 border border-stone-200 rounded-xl cursor-pointer"
                 >
                   Save as Draft
                 </button>
@@ -920,7 +1024,7 @@ export default function ApplyLoanPage() {
                   type="button"
                   onClick={handleSubmitApplication}
                   disabled={submitting}
-                  className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-lg shadow-emerald-600/30 cursor-pointer disabled:opacity-50"
+                  className="px-7 py-3 bg-gradient-to-r from-amber-500 via-amber-600 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-xl text-xs font-bold transition flex items-center gap-2 shadow-lg shadow-orange-500/25 cursor-pointer disabled:opacity-50 active:scale-95"
                 >
                   <Send className="w-3.5 h-3.5" />
                   {submitting ? 'Submitting Application...' : 'Submit Final Application'}

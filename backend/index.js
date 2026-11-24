@@ -26,7 +26,7 @@ app.use(
     origin: process.env.CLIENT_URL || "http://localhost:5173",
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "x-user-email", "x-user-name"]
+    allowedHeaders: ["Content-Type", "Authorization", "x-user-email", "x-user-name", "x-user-role"]
   })
 )
 
@@ -38,8 +38,32 @@ app.use(express.urlencoded({ extended: true, limit: "10mb" }))
 const uploadsPath = path.resolve(process.cwd(), "uploads")
 app.use("/uploads", express.static(uploadsPath))
 
-// Attach Clerk authentication middleware to all requests
-app.use(clerkMiddleware())
+// Attach Clerk authentication middleware (Works with or without backend secret key)
+const publishableKey =
+  process.env.CLERK_PUBLISHABLE_KEY ||
+  process.env.VITE_CLERK_PUBLISHABLE_KEY ||
+  "pk_test_YXB0LW11bGUtNzU0OS5jbGVyay5hY2NvdW50cy5kZXYk"
+const secretKey = process.env.CLERK_SECRET_KEY
+
+// If secret key is present, use Clerk express middleware; otherwise allow client token passthrough
+if (secretKey) {
+  app.use(
+    clerkMiddleware({
+      publishableKey,
+      secretKey
+    })
+  )
+} else {
+  // Client-only Clerk setup: extract auth from headers seamlessly
+  app.use((req, res, next) => {
+    req.auth = req.auth || {}
+    const authHeader = req.headers.authorization
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      req.auth.token = authHeader.split(" ")[1]
+    }
+    next()
+  })
+}
 
 // Apply standard API rate limiting to API routes
 app.use("/api", apiLimiter)

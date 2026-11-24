@@ -21,7 +21,8 @@ import {
 import {
   getApplications,
   runEligibilityCheck,
-  submitOfficerReview
+  submitOfficerReview,
+  clearDummyData
 } from '../../lib/loanWorkflowApi'
 
 export default function OfficerPage() {
@@ -51,7 +52,8 @@ export default function OfficerPage() {
       const data = await getApplications({
         status: activeTab === 'all' ? undefined : activeTab,
         loanType: selectedLoanType === 'all' ? undefined : selectedLoanType,
-        search: searchQuery
+        search: searchQuery,
+        excludeDrafts: true
       })
       setApplications(data)
       if (selectedApp) {
@@ -77,7 +79,7 @@ export default function OfficerPage() {
       submitted: raw.filter((a) => a.status === 'submitted').length,
       underReview: raw.filter((a) => a.status === 'under_review').length,
       moreInfo: raw.filter((a) => a.status === 'more_info_needed').length,
-      recommended: raw.filter((a) => a.status.startsWith('recommended')).length
+      recommended: raw.filter((a) => (a.status || '').startsWith('recommended')).length
     }
   }, [applications])
 
@@ -166,24 +168,24 @@ export default function OfficerPage() {
   return (
     <div className="w-full space-y-8">
       {/* Page Header */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-6 sm:p-8 shadow-sm">
+      <div className="bg-white border border-stone-200/80 rounded-3xl p-6 sm:p-8 shadow-md shadow-stone-200/40">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-700 text-xs font-semibold uppercase tracking-wider mb-2">
-              <ShieldCheck className="w-4 h-4" />
-              Loan Officer Review Desk
+            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-amber-50/90 border border-amber-200/80 text-amber-900 text-xs font-semibold uppercase tracking-wider mb-2 shadow-xs">
+              <span>🍃</span>
+              <span>Loan Officer Review Desk</span>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-[#3A1700] tracking-tight">
               Application Review &amp; Underwriting
             </h1>
-            <p className="text-sm text-slate-500 mt-1">
+            <p className="text-xs sm:text-sm text-[#5C3D2E] mt-1 leading-relaxed">
               Inspect applicant records, trigger deterministic rule-based checks, request missing documents, and submit recommendations to Admin.
             </p>
           </div>
 
           <button
             onClick={loadData}
-            className="self-start md:self-auto flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition cursor-pointer"
+            className="self-start md:self-auto flex items-center gap-2 px-4 py-2.5 text-xs sm:text-sm font-semibold text-stone-700 bg-[#F8F5EE] hover:bg-[#F0ECE2] border border-stone-200/90 rounded-xl transition cursor-pointer"
           >
             <RefreshCw className="w-4 h-4" />
             Refresh Queue
@@ -191,28 +193,28 @@ export default function OfficerPage() {
         </div>
 
         {/* Live Metric Cards */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-8 pt-6 border-t border-slate-100">
-          <div className="bg-slate-50 p-4 rounded-xl border border-slate-200/80">
-            <span className="text-xs font-medium text-slate-500">Queue Total</span>
-            <div className="text-2xl font-bold text-slate-900 mt-1">{metrics.total}</div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-8 pt-6 border-t border-stone-100">
+          <div className="bg-[#FFFDF9] p-4 rounded-2xl border border-stone-200/80">
+            <span className="text-xs font-medium text-stone-500">Queue Total</span>
+            <div className="text-2xl font-black text-[#3A1700] mt-1">{metrics.total}</div>
           </div>
-          <div className="bg-blue-50/60 p-4 rounded-xl border border-blue-200/60">
-            <span className="text-xs font-medium text-blue-700">Needs Initial Review</span>
-            <div className="text-2xl font-bold text-blue-800 mt-1">{metrics.submitted}</div>
+          <div className="bg-amber-50/70 p-4 rounded-2xl border border-amber-200/80">
+            <span className="text-xs font-medium text-amber-900">Needs Initial Review</span>
+            <div className="text-2xl font-black text-amber-800 mt-1">{metrics.submitted}</div>
           </div>
-          <div className="bg-amber-50/60 p-4 rounded-xl border border-amber-200/60">
-            <span className="text-xs font-medium text-amber-700">More Info Requested</span>
-            <div className="text-2xl font-bold text-amber-800 mt-1">{metrics.moreInfo}</div>
+          <div className="bg-orange-50/70 p-4 rounded-2xl border border-orange-200/80">
+            <span className="text-xs font-medium text-orange-900">More Info Requested</span>
+            <div className="text-2xl font-black text-orange-800 mt-1">{metrics.moreInfo}</div>
           </div>
-          <div className="bg-emerald-50/60 p-4 rounded-xl border border-emerald-200/60">
-            <span className="text-xs font-medium text-emerald-700">Recommended to Admin</span>
-            <div className="text-2xl font-bold text-emerald-800 mt-1">{metrics.recommended}</div>
+          <div className="bg-emerald-50/70 p-4 rounded-2xl border border-emerald-200/80">
+            <span className="text-xs font-medium text-emerald-900">Recommended to Admin</span>
+            <div className="text-2xl font-black text-emerald-800 mt-1">{metrics.recommended}</div>
           </div>
         </div>
       </div>
 
       {/* Queue Filters and Search */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-6">
+      <div className="bg-white border border-stone-200/80 rounded-3xl p-6 sm:p-8 shadow-md shadow-stone-200/40 space-y-6">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           {/* Status Tabs */}
           <div className="flex flex-wrap gap-2">
@@ -227,10 +229,10 @@ export default function OfficerPage() {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-medium transition cursor-pointer ${
+                className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition cursor-pointer ${
                   activeTab === tab.id
-                    ? 'bg-blue-600 text-white shadow-sm'
-                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                    ? 'bg-gradient-to-r from-amber-500 via-amber-600 to-orange-500 text-white shadow-md shadow-orange-500/25 font-bold'
+                    : 'bg-[#F8F5EE] text-stone-700 hover:bg-[#F0ECE2] border border-stone-200/90'
                 }`}
               >
                 {tab.label}
@@ -241,20 +243,20 @@ export default function OfficerPage() {
           {/* Search & Loan Type Filter */}
           <div className="flex flex-col sm:flex-row items-center gap-3">
             <div className="relative w-full sm:w-64">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
               <input
                 type="text"
                 placeholder="Search by ID, Name, PAN..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-4 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                className="w-full pl-9 pr-4 py-2 text-sm bg-stone-50 border border-stone-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
               />
             </div>
 
             <select
               value={selectedLoanType}
               onChange={(e) => setSelectedLoanType(e.target.value)}
-              className="w-full sm:w-auto px-3.5 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+              className="w-full sm:w-auto px-3.5 py-2 text-sm bg-stone-50 border border-stone-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500/20 font-medium text-stone-800"
             >
               <option value="all">All Loan Types</option>
               <option value="personal">Personal Loan</option>
@@ -266,9 +268,9 @@ export default function OfficerPage() {
         </div>
 
         {/* Application Queue Table */}
-        <div className="overflow-x-auto rounded-xl border border-slate-200">
-          <table className="w-full text-left text-sm text-slate-700">
-            <thead className="bg-slate-50/80 text-xs font-semibold uppercase tracking-wider text-slate-500 border-b border-slate-200">
+        <div className="overflow-x-auto rounded-2xl border border-stone-200">
+          <table className="w-full text-left text-sm text-stone-700">
+            <thead className="bg-[#F8F5EE] text-xs font-bold uppercase tracking-wider text-stone-600 border-b border-stone-200">
               <tr>
                 <th className="px-5 py-3.5">Application</th>
                 <th className="px-5 py-3.5">Applicant &amp; Contact</th>
@@ -278,52 +280,52 @@ export default function OfficerPage() {
                 <th className="px-5 py-3.5 text-right">Action</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-stone-100">
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center text-slate-400">
+                  <td colSpan={6} className="px-6 py-12 text-center text-stone-400">
                     Loading loan applications...
                   </td>
                 </tr>
               ) : applications.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center text-slate-500">
+                  <td colSpan={6} className="px-6 py-12 text-center text-stone-500">
                     No loan applications match the current filter.
                   </td>
                 </tr>
               ) : (
                 applications.map((app) => (
-                  <tr key={app._id} className="hover:bg-slate-50/80 transition">
+                  <tr key={app._id} className="hover:bg-amber-50/30 transition">
                     <td className="px-5 py-4">
-                      <div className="font-bold text-slate-900">{app.applicationNumber}</div>
-                      <div className="text-xs text-slate-400 uppercase font-medium mt-0.5">
+                      <div className="font-extrabold text-[#3A1700]">{app.applicationNumber}</div>
+                      <div className="text-xs text-stone-500 uppercase font-medium mt-0.5">
                         {app.loanDetails?.loanType} Loan
                       </div>
                     </td>
                     <td className="px-5 py-4">
-                      <div className="font-medium text-slate-900">{app.personalDetails?.fullName || app.applicantId?.name}</div>
-                      <div className="text-xs text-slate-500">{app.applicantId?.email}</div>
-                      <div className="text-xs text-slate-400 mt-0.5">PAN: {app.personalDetails?.panNumber || 'N/A'}</div>
+                      <div className="font-bold text-stone-900">{app.personalDetails?.fullName || app.applicantId?.name || 'Applicant'}</div>
+                      <div className="text-xs text-stone-500">{app.applicantId?.email || app.personalDetails?.email || app.applicantEmail || ''}</div>
+                      <div className="text-xs text-stone-400 mt-0.5">PAN: {app.personalDetails?.panNumber || 'N/A'}</div>
                     </td>
                     <td className="px-5 py-4">
-                      <div className="font-semibold text-slate-900">
+                      <div className="font-extrabold text-[#3A1700]">
                         ₹{Number(app.loanDetails?.amount || 0).toLocaleString('en-IN')}
                       </div>
-                      <div className="text-xs text-slate-500">
+                      <div className="text-xs text-stone-500">
                         {app.loanDetails?.tenureMonths} mos @ {app.loanDetails?.interestRate}%
                       </div>
                     </td>
                     <td className="px-5 py-4">
-                      <div className="font-medium text-slate-900">
+                      <div className="font-semibold text-stone-900">
                         ₹{Number(app.incomeDetails?.monthlyIncome || 0).toLocaleString('en-IN')}/mo
                       </div>
-                      <div className="text-xs text-slate-500">
+                      <div className="text-xs text-stone-500">
                         {app.eligibilityCheck ? (
-                          <span className={app.eligibilityCheck.debtToIncomeRatio <= 50 ? 'text-emerald-600 font-semibold' : 'text-rose-600 font-semibold'}>
+                          <span className={app.eligibilityCheck.debtToIncomeRatio <= 50 ? 'text-emerald-700 font-bold' : 'text-rose-600 font-bold'}>
                             DTI: {app.eligibilityCheck.debtToIncomeRatio}%
                           </span>
                         ) : (
-                          <span className="text-slate-400">DTI unverified</span>
+                          <span className="text-stone-400">DTI unverified</span>
                         )}
                       </div>
                     </td>
@@ -331,7 +333,7 @@ export default function OfficerPage() {
                     <td className="px-5 py-4 text-right">
                       <button
                         onClick={() => handleOpenReview(app)}
-                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-600 hover:text-white rounded-lg text-xs font-semibold transition cursor-pointer"
+                        className="inline-flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-xl text-xs font-bold transition shadow-sm cursor-pointer active:scale-95"
                       >
                         <Eye className="w-3.5 h-3.5" />
                         Inspect &amp; Review
@@ -347,22 +349,22 @@ export default function OfficerPage() {
 
       {/* Review Drawer / Modal */}
       {selectedApp && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex justify-center items-start p-4 sm:p-6 lg:p-8">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-5xl overflow-hidden border border-slate-200 my-auto">
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-stone-900/60 backdrop-blur-sm flex justify-center items-start p-4 sm:p-6 lg:p-8">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-5xl overflow-hidden border border-stone-200 my-auto">
             {/* Modal Header */}
-            <div className="p-6 bg-slate-900 text-white flex justify-between items-center">
+            <div className="p-6 bg-gradient-to-br from-[#2E1810] to-[#1E0F0A] text-white flex justify-between items-center">
               <div>
                 <div className="flex items-center gap-3">
                   <h2 className="text-xl sm:text-2xl font-bold">{selectedApp.applicationNumber}</h2>
                   {getStatusBadge(selectedApp.status)}
                 </div>
-                <p className="text-xs text-slate-400 mt-1">
+                <p className="text-xs text-stone-300 mt-1">
                   Submitted on {new Date(selectedApp.createdAt).toLocaleDateString('en-IN')} &bull; Applicant: {selectedApp.personalDetails?.fullName}
                 </p>
               </div>
               <button
                 onClick={() => setSelectedApp(null)}
-                className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-full transition cursor-pointer"
+                className="p-2 text-stone-300 hover:text-white hover:bg-white/10 rounded-full transition cursor-pointer text-xl"
               >
                 &times;
               </button>
@@ -387,33 +389,33 @@ export default function OfficerPage() {
               {/* 1. Applicant & Loan Snapshots */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Personal Details */}
-                <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-3">
-                  <h3 className="font-bold text-slate-900 flex items-center gap-2 text-sm uppercase tracking-wide">
-                    <User className="w-4 h-4 text-blue-600" />
+                <div className="p-5 rounded-2xl bg-[#FFFDF9] border border-stone-200/80 space-y-3">
+                  <h3 className="font-bold text-[#3A1700] flex items-center gap-2 text-sm uppercase tracking-wide">
+                    <User className="w-4 h-4 text-amber-600" />
                     Applicant Personal Profile
                   </h3>
                   <div className="grid grid-cols-2 gap-2 text-xs">
                     <div>
-                      <span className="text-slate-500">Full Name:</span>
-                      <p className="font-semibold text-slate-800 mt-0.5">{selectedApp.personalDetails?.fullName}</p>
+                      <span className="text-stone-500">Full Name:</span>
+                      <p className="font-semibold text-stone-900 mt-0.5">{selectedApp.personalDetails?.fullName}</p>
                     </div>
                     <div>
-                      <span className="text-slate-500">PAN / ID:</span>
-                      <p className="font-semibold text-slate-800 mt-0.5">{selectedApp.personalDetails?.panNumber}</p>
+                      <span className="text-stone-500">PAN / ID:</span>
+                      <p className="font-semibold text-stone-900 mt-0.5">{selectedApp.personalDetails?.panNumber}</p>
                     </div>
                     <div>
-                      <span className="text-slate-500">Date of Birth:</span>
-                      <p className="font-semibold text-slate-800 mt-0.5">
+                      <span className="text-stone-500">Date of Birth:</span>
+                      <p className="font-semibold text-stone-900 mt-0.5">
                         {selectedApp.personalDetails?.dateOfBirth ? new Date(selectedApp.personalDetails.dateOfBirth).toLocaleDateString() : 'N/A'}
                       </p>
                     </div>
                     <div>
-                      <span className="text-slate-500">Phone:</span>
-                      <p className="font-semibold text-slate-800 mt-0.5">{selectedApp.personalDetails?.phone || selectedApp.applicantId?.phone}</p>
+                      <span className="text-stone-500">Phone:</span>
+                      <p className="font-semibold text-stone-900 mt-0.5">{selectedApp.personalDetails?.phone || selectedApp.applicantId?.phone}</p>
                     </div>
-                    <div className="col-span-2 pt-2 border-t border-slate-200">
-                      <span className="text-slate-500">Address:</span>
-                      <p className="font-semibold text-slate-800 mt-0.5">
+                    <div className="col-span-2 pt-2 border-t border-stone-200">
+                      <span className="text-stone-500">Address:</span>
+                      <p className="font-semibold text-stone-900 mt-0.5">
                         {selectedApp.personalDetails?.address?.street}, {selectedApp.personalDetails?.address?.city}, {selectedApp.personalDetails?.address?.state} - {selectedApp.personalDetails?.address?.postalCode}
                       </p>
                     </div>
@@ -421,43 +423,43 @@ export default function OfficerPage() {
                 </div>
 
                 {/* Loan & Income Profile */}
-                <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-3">
-                  <h3 className="font-bold text-slate-900 flex items-center gap-2 text-sm uppercase tracking-wide">
-                    <FileText className="w-4 h-4 text-blue-600" />
+                <div className="p-5 rounded-2xl bg-[#FFFDF9] border border-stone-200/80 space-y-3">
+                  <h3 className="font-bold text-[#3A1700] flex items-center gap-2 text-sm uppercase tracking-wide">
+                    <FileText className="w-4 h-4 text-amber-600" />
                     Credit &amp; Income Profile
                   </h3>
                   <div className="grid grid-cols-2 gap-2 text-xs">
                     <div>
-                      <span className="text-slate-500">Loan Type:</span>
-                      <p className="font-semibold text-slate-800 uppercase mt-0.5">{selectedApp.loanDetails?.loanType}</p>
+                      <span className="text-stone-500">Loan Type:</span>
+                      <p className="font-semibold text-stone-900 uppercase mt-0.5">{selectedApp.loanDetails?.loanType}</p>
                     </div>
                     <div>
-                      <span className="text-slate-500">Principal Requested:</span>
-                      <p className="font-bold text-blue-700 text-sm mt-0.5">
+                      <span className="text-stone-500">Principal Requested:</span>
+                      <p className="font-bold text-amber-700 text-sm mt-0.5">
                         ₹{Number(selectedApp.loanDetails?.amount || 0).toLocaleString('en-IN')}
                       </p>
                     </div>
                     <div>
-                      <span className="text-slate-500">Tenure &amp; Rate:</span>
-                      <p className="font-semibold text-slate-800 mt-0.5">
+                      <span className="text-stone-500">Tenure &amp; Rate:</span>
+                      <p className="font-semibold text-stone-900 mt-0.5">
                         {selectedApp.loanDetails?.tenureMonths} mos @ {selectedApp.loanDetails?.interestRate}% p.a.
                       </p>
                     </div>
                     <div>
-                      <span className="text-slate-500">Monthly EMI Preview:</span>
+                      <span className="text-stone-500">Monthly EMI Preview:</span>
                       <p className="font-bold text-emerald-700 text-sm mt-0.5">
                         ₹{Number(selectedApp.loanDetails?.monthlyEmiPreview || 0).toLocaleString('en-IN')}/mo
                       </p>
                     </div>
-                    <div className="pt-2 border-t border-slate-200">
-                      <span className="text-slate-500">Monthly Income:</span>
-                      <p className="font-semibold text-slate-800 mt-0.5">
+                    <div className="pt-2 border-t border-stone-200">
+                      <span className="text-stone-500">Monthly Income:</span>
+                      <p className="font-semibold text-stone-900 mt-0.5">
                         ₹{Number(selectedApp.incomeDetails?.monthlyIncome || 0).toLocaleString('en-IN')} ({selectedApp.incomeDetails?.employmentType})
                       </p>
                     </div>
-                    <div className="pt-2 border-t border-slate-200">
-                      <span className="text-slate-500">Existing Commitments:</span>
-                      <p className="font-semibold text-slate-800 mt-0.5">
+                    <div className="pt-2 border-t border-stone-200">
+                      <span className="text-stone-500">Existing Commitments:</span>
+                      <p className="font-semibold text-stone-900 mt-0.5">
                         ₹{Number(selectedApp.incomeDetails?.existingMonthlyEmi || 0).toLocaleString('en-IN')}/mo
                       </p>
                     </div>
@@ -466,13 +468,13 @@ export default function OfficerPage() {
               </div>
 
               {/* 2. Uploaded Documents Section */}
-              <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4">
+              <div className="bg-white border border-stone-200/80 rounded-2xl p-6 shadow-xs space-y-4">
                 <div className="flex justify-between items-center">
-                  <h3 className="font-bold text-slate-900 flex items-center gap-2 text-sm uppercase tracking-wide">
-                    <FileCheck className="w-4 h-4 text-indigo-600" />
+                  <h3 className="font-bold text-[#3A1700] flex items-center gap-2 text-sm uppercase tracking-wide">
+                    <FileCheck className="w-4 h-4 text-amber-600" />
                     Uploaded Verification Documents ({selectedApp.documents?.length || 0})
                   </h3>
-                  <span className="text-xs text-slate-400">Click preview to inspect uploaded KYC &amp; income proofs</span>
+                  <span className="text-xs text-stone-400">Click preview to inspect uploaded KYC &amp; income proofs</span>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
@@ -480,17 +482,17 @@ export default function OfficerPage() {
                     selectedApp.documents.map((doc, idx) => (
                       <div
                         key={idx}
-                        className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-slate-100 transition flex items-center justify-between"
+                        className="p-3.5 rounded-xl border border-stone-200 bg-[#F8F5EE]/60 hover:bg-[#F8F5EE] transition flex items-center justify-between"
                       >
                         <div className="flex items-center gap-3 overflow-hidden">
-                          <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center flex-shrink-0 font-bold text-xs uppercase">
+                          <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-800 flex items-center justify-center flex-shrink-0 font-bold text-xs uppercase">
                             {doc.documentType?.split('_')[0] || 'DOC'}
                           </div>
                           <div className="overflow-hidden">
-                            <p className="text-xs font-semibold text-slate-800 truncate" title={doc.fileName}>
+                            <p className="text-xs font-semibold text-stone-900 truncate" title={doc.fileName}>
                               {doc.fileName}
                             </p>
-                            <span className="text-[10px] text-slate-500 uppercase tracking-wider">
+                            <span className="text-[10px] text-stone-500 uppercase tracking-wider">
                               {doc.documentType?.replace('_', ' ')}
                             </span>
                           </div>
@@ -498,7 +500,7 @@ export default function OfficerPage() {
 
                         <button
                           onClick={() => setPreviewDoc(doc)}
-                          className="p-1.5 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition flex-shrink-0"
+                          className="p-1.5 text-amber-700 hover:text-amber-900 hover:bg-amber-100/50 rounded-lg transition flex-shrink-0 cursor-pointer"
                           title="Preview Document"
                         >
                           <Eye className="w-4 h-4" />
@@ -506,7 +508,7 @@ export default function OfficerPage() {
                       </div>
                     ))
                   ) : (
-                    <div className="col-span-3 text-center py-6 text-xs text-slate-400">
+                    <div className="col-span-3 text-center py-6 text-xs text-stone-400">
                       No documents uploaded yet.
                     </div>
                   )}
@@ -514,15 +516,15 @@ export default function OfficerPage() {
               </div>
 
               {/* 3. Deterministic Rule-Based Eligibility Check Panel */}
-              <div className="bg-slate-900 text-white rounded-2xl p-6 sm:p-8 space-y-6">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-800">
+              <div className="bg-gradient-to-br from-[#2E1810] to-[#1E0F0A] text-white rounded-3xl p-6 sm:p-8 space-y-6 border border-amber-900/30 shadow-xl">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-white/10">
                   <div>
-                    <div className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-blue-400">
+                    <div className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-amber-300">
                       <ShieldCheck className="w-4 h-4" />
                       Rule-Based Eligibility Engine
                     </div>
                     <h3 className="text-xl font-bold mt-1">Credit Assessment Scorecard</h3>
-                    <p className="text-xs text-slate-400 mt-1">
+                    <p className="text-xs text-stone-300 mt-1">
                       Deterministic evaluation of Age boundaries, Income thresholds, Debt-to-Income (DTI) ratio, and mandatory document presence.
                     </p>
                   </div>
@@ -530,7 +532,7 @@ export default function OfficerPage() {
                   <button
                     onClick={handleRunEligibility}
                     disabled={checkingEligibility}
-                    className="flex items-center justify-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-semibold transition disabled:opacity-50 cursor-pointer shadow-lg shadow-blue-600/30"
+                    className="flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-amber-500 via-amber-600 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-xl text-sm font-bold transition disabled:opacity-50 cursor-pointer shadow-lg shadow-orange-500/25 active:scale-95"
                   >
                     <RefreshCw className={`w-4 h-4 ${checkingEligibility ? 'animate-spin' : ''}`} />
                     {checkingEligibility ? 'Evaluating...' : 'Run Eligibility Check'}
@@ -625,10 +627,10 @@ export default function OfficerPage() {
               )}
 
               {/* 5. Loan Officer Recommendation Action Form */}
-              <form onSubmit={handleSubmitReview} className="bg-white border border-slate-200 rounded-2xl p-6 sm:p-8 shadow-sm space-y-6">
-                <div className="border-b border-slate-100 pb-4">
-                  <h3 className="text-lg font-bold text-slate-900">Officer Recommendation Decision</h3>
-                  <p className="text-xs text-slate-500 mt-0.5">
+              <form onSubmit={handleSubmitReview} className="bg-white border border-stone-200/80 rounded-2xl p-6 sm:p-8 shadow-xs space-y-6">
+                <div className="border-b border-stone-100 pb-4">
+                  <h3 className="text-lg font-bold text-[#3A1700]">Officer Recommendation Decision</h3>
+                  <p className="text-xs text-stone-500 mt-0.5">
                     Select your recommendation and provide underwriting notes for the Admin review queue.
                   </p>
                 </div>
@@ -638,12 +640,12 @@ export default function OfficerPage() {
                   <label
                     className={`p-4 rounded-xl border-2 flex flex-col justify-between cursor-pointer transition ${
                       recommendation === 'recommended_approval'
-                        ? 'border-emerald-600 bg-emerald-50/50'
-                        : 'border-slate-200 hover:border-slate-300'
+                        ? 'border-emerald-600 bg-emerald-50/70 ring-2 ring-emerald-500/20'
+                        : 'border-stone-200 hover:border-stone-300 bg-white'
                     }`}
                   >
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-emerald-800 uppercase">Recommend Approval</span>
+                      <span className="text-xs font-bold text-emerald-950 uppercase">Recommend Approval</span>
                       <input
                         type="radio"
                         name="recommendation"
@@ -653,7 +655,7 @@ export default function OfficerPage() {
                         className="accent-emerald-600"
                       />
                     </div>
-                    <p className="text-[11px] text-slate-600 mt-2">
+                    <p className="text-[11px] text-stone-600 mt-2">
                       Applicant satisfies policy criteria. Forward to Admin for final sanction.
                     </p>
                   </label>
@@ -661,12 +663,12 @@ export default function OfficerPage() {
                   <label
                     className={`p-4 rounded-xl border-2 flex flex-col justify-between cursor-pointer transition ${
                       recommendation === 'more_info_needed'
-                        ? 'border-amber-600 bg-amber-50/50'
-                        : 'border-slate-200 hover:border-slate-300'
+                        ? 'border-amber-600 bg-amber-50/70 ring-2 ring-amber-500/20'
+                        : 'border-stone-200 hover:border-stone-300 bg-white'
                     }`}
                   >
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-amber-800 uppercase">Request More Info</span>
+                      <span className="text-xs font-bold text-amber-950 uppercase">Request More Info</span>
                       <input
                         type="radio"
                         name="recommendation"
@@ -676,7 +678,7 @@ export default function OfficerPage() {
                         className="accent-amber-600"
                       />
                     </div>
-                    <p className="text-[11px] text-slate-600 mt-2">
+                    <p className="text-[11px] text-stone-600 mt-2">
                       Ask applicant to clarify details or re-upload missing documents.
                     </p>
                   </label>
@@ -684,12 +686,12 @@ export default function OfficerPage() {
                   <label
                     className={`p-4 rounded-xl border-2 flex flex-col justify-between cursor-pointer transition ${
                       recommendation === 'recommended_rejection'
-                        ? 'border-rose-600 bg-rose-50/50'
-                        : 'border-slate-200 hover:border-slate-300'
+                        ? 'border-rose-600 bg-rose-50/70 ring-2 ring-rose-500/20'
+                        : 'border-stone-200 hover:border-stone-300 bg-white'
                     }`}
                   >
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-rose-800 uppercase">Recommend Rejection</span>
+                      <span className="text-xs font-bold text-rose-950 uppercase">Recommend Rejection</span>
                       <input
                         type="radio"
                         name="recommendation"
@@ -699,7 +701,7 @@ export default function OfficerPage() {
                         className="accent-rose-600"
                       />
                     </div>
-                    <p className="text-[11px] text-slate-600 mt-2">
+                    <p className="text-[11px] text-stone-600 mt-2">
                       High risk, DTI breach, or unverified documents. Forward rejection note.
                     </p>
                   </label>
@@ -727,7 +729,7 @@ export default function OfficerPage() {
 
                 {/* General Officer Remarks */}
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-700 block">
+                  <label className="text-xs font-bold text-[#3A1700] block">
                     Underwriting Remarks &amp; Justification
                   </label>
                   <textarea
@@ -735,22 +737,22 @@ export default function OfficerPage() {
                     placeholder="Enter any notes, verification findings, or audit justification..."
                     value={remarks}
                     onChange={(e) => setRemarks(e.target.value)}
-                    className="w-full p-3 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                    className="w-full p-3 text-xs bg-stone-50 border border-stone-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
                   />
                 </div>
 
-                <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+                <div className="flex justify-end gap-3 pt-4 border-t border-stone-100">
                   <button
                     type="button"
                     onClick={() => setSelectedApp(null)}
-                    className="px-5 py-2.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition"
+                    className="px-5 py-2.5 text-xs font-semibold text-stone-700 bg-[#F8F5EE] hover:bg-[#F0ECE2] border border-stone-200/90 rounded-xl transition cursor-pointer"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
                     disabled={submittingReview}
-                    className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition shadow-md shadow-blue-600/20 disabled:opacity-50 flex items-center gap-2 cursor-pointer"
+                    className="px-7 py-2.5 bg-gradient-to-r from-amber-500 via-amber-600 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-xl text-xs font-bold transition shadow-lg shadow-orange-500/25 disabled:opacity-50 flex items-center gap-2 cursor-pointer active:scale-95"
                   >
                     <Send className="w-3.5 h-3.5" />
                     {submittingReview ? 'Submitting...' : 'Submit Officer Review'}
@@ -764,39 +766,39 @@ export default function OfficerPage() {
 
       {/* Document Quick Preview Modal */}
       {previewDoc && (
-        <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-sm flex justify-center items-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full p-6 space-y-4">
-            <div className="flex justify-between items-center pb-3 border-b border-slate-200">
+        <div className="fixed inset-0 z-50 bg-[#2E1810]/60 backdrop-blur-sm flex justify-center items-center p-4">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full p-6 space-y-4 border border-stone-200/80">
+            <div className="flex justify-between items-center pb-3 border-b border-stone-200">
               <div>
-                <h4 className="font-bold text-slate-900 text-sm">{previewDoc.fileName}</h4>
-                <span className="text-xs text-slate-500 uppercase">{previewDoc.documentType?.replace('_', ' ')}</span>
+                <h4 className="font-bold text-[#3A1700] text-sm">{previewDoc.fileName}</h4>
+                <span className="text-xs text-stone-500 uppercase font-semibold">{previewDoc.documentType?.replace('_', ' ')}</span>
               </div>
               <button
                 onClick={() => setPreviewDoc(null)}
-                className="p-1.5 text-slate-400 hover:text-slate-700 text-lg font-bold"
+                className="p-1.5 text-stone-400 hover:text-stone-700 text-lg font-bold"
               >
                 &times;
               </button>
             </div>
 
-            <div className="bg-slate-100 rounded-xl p-4 flex flex-col items-center justify-center min-h-[300px]">
+            <div className="bg-[#F8F5EE] rounded-2xl p-4 flex flex-col items-center justify-center min-h-[300px] border border-stone-200/60">
               <img
                 src={previewDoc.fileUrl}
                 alt={previewDoc.fileName}
-                className="max-h-80 w-auto rounded-lg shadow-sm object-contain"
+                className="max-h-80 w-auto rounded-xl shadow-xs object-contain"
                 onError={(e) => {
                   e.target.style.display = 'none'
                   e.target.nextSibling.style.display = 'block'
                 }}
               />
-              <div style={{ display: 'none' }} className="text-center p-8 text-slate-500 text-xs">
-                <FileText className="w-12 h-12 mx-auto text-slate-400 mb-2" />
+              <div style={{ display: 'none' }} className="text-center p-8 text-stone-500 text-xs">
+                <FileText className="w-12 h-12 mx-auto text-stone-400 mb-2" />
                 <p>Preview rendered for document: {previewDoc.fileName}</p>
                 <a
                   href={previewDoc.fileUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-semibold"
+                  className="mt-3 inline-flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-xl text-xs font-bold shadow-md shadow-orange-500/20"
                 >
                   <ExternalLink className="w-3.5 h-3.5" /> Open in New Tab
                 </a>
@@ -806,7 +808,7 @@ export default function OfficerPage() {
             <div className="flex justify-end">
               <button
                 onClick={() => setPreviewDoc(null)}
-                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold"
+                className="px-5 py-2.5 bg-[#F8F5EE] hover:bg-[#F0ECE2] text-stone-700 border border-stone-200/90 rounded-xl text-xs font-bold transition"
               >
                 Close Preview
               </button>

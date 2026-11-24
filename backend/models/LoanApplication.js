@@ -105,6 +105,12 @@ const loanApplicationSchema = new mongoose.Schema(
         trim: true,
         default: ""
       },
+      email: {
+        type: String,
+        trim: true,
+        lowercase: true,
+        default: ""
+      },
       dateOfBirth: {
         type: Date
       },
@@ -274,13 +280,12 @@ const loanApplicationSchema = new mongoose.Schema(
 )
 
 // Auto-generate applicationNumber before validation on new records
-loanApplicationSchema.pre("validate", function (next) {
-  if (!this.applicationNumber && this.isNew) {
+loanApplicationSchema.pre("validate", function () {
+  if (!this.applicationNumber) {
     const timestamp = Date.now().toString().slice(-6)
     const random = Math.floor(1000 + Math.random() * 9000)
     this.applicationNumber = `LMS-${timestamp}-${random}`
   }
-  next()
 })
 
 // Compound indexes for fast list queries, filtering, and pagination

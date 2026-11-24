@@ -8,11 +8,18 @@ export const getAllUsers = async (req, res) => {
     const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 10))
     const skip = (page - 1) * limit
 
-    const { role, q, isActive } = req.query
+    const { role, q, isActive, excludeAdmin } = req.query
     const filter = {}
 
-    if (role && ["applicant", "loan_officer", "admin"].includes(role)) {
+    // Default: exclude administrators from user management list unless explicitly requested
+    if (excludeAdmin === "true" || !role || role === "all") {
+      filter.role = { $ne: "admin" }
+    }
+
+    if (role && ["applicant", "loan_officer"].includes(role)) {
       filter.role = role
+    } else if (role === "admin") {
+      filter.role = "admin"
     }
 
     if (typeof isActive !== "undefined") {
@@ -75,34 +82,12 @@ export const getUserById = async (req, res) => {
   }
 }
 
-// 3. Update User Role (Admin only)
+// 3. Update User Role (Disabled - Roles are permanently locked upon selection)
 export const updateUserRole = async (req, res) => {
-  try {
-    const { id } = req.params
-    const { role } = req.body
-
-    if (!["applicant", "loan_officer", "admin"].includes(role)) {
-      return res.status(400).json({ success: false, message: "Invalid role specified" })
-    }
-
-    // Prevent admin from removing their own admin status accidentally
-    if (req.user.id === id && role !== "admin") {
-      return res.status(400).json({ success: false, message: "You cannot revoke your own admin rights" })
-    }
-
-    const user = await User.findByIdAndUpdate(id, { role }, { new: true })
-    if (!user) {
-      return res.status(404).json({ success: false, message: "User not found" })
-    }
-
-    return res.status(200).json({
-      success: true,
-      message: `User role updated to ${role}`,
-      user
-    })
-  } catch (error) {
-    return res.status(500).json({ success: false, message: error.message })
-  }
+  return res.status(400).json({
+    success: false,
+    message: "Roles are permanently locked upon user selection and cannot be changed by anyone, including administrators."
+  })
 }
 
 // 4. Toggle User Status (Admin only, activate / deactivate)

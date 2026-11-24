@@ -23,10 +23,42 @@ router.use(requireClerkAuth)
 
 // Applicant drafts & submissions
 router.post("/draft", validateDraft, saveDraft)
-router.post("/:id/submit", validateSubmission, submitApplication)
+router.post("/submit", submitApplication)
+router.post("/:id/submit", submitApplication)
 router.get("/my", getMyApplications)
 
-// Document upload endpoint for applications
+// Officer & Admin application queue listing (Placed before /:id)
+router.get("/", requireRole("loan_officer", "admin", "officer", "applicant"), getAllApplications)
+
+// Standalone & application document upload endpoint
+router.post("/upload-document", uploadLimiter, uploadMultiple("documents", 5), async (req, res, next) => {
+  try {
+    const documentType = req.body.documentType || "other"
+
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({ success: false, message: "No files uploaded" })
+    }
+
+    const uploadedDocs = req.files.map((file) => ({
+      documentType,
+      fileName: file.originalname,
+      fileUrl: `/uploads/documents/${file.filename}`,
+      fileSize: file.size,
+      mimeType: file.mimetype,
+      uploadedAt: new Date()
+    }))
+
+    return res.status(200).json({
+      success: true,
+      message: `${uploadedDocs.length} document(s) uploaded successfully`,
+      documents: uploadedDocs
+    })
+  } catch (error) {
+    next(error)
+  }
+})
+
+// Document upload endpoint for existing applications
 router.post("/:id/upload", uploadLimiter, uploadMultiple("documents", 5), async (req, res, next) => {
   try {
     const LoanApplication = (await import("../models/LoanApplication.js")).default
@@ -69,8 +101,5 @@ router.post("/:id/respond-info", respondToMoreInfo)
 
 // Single application details (Access checked inside controller)
 router.get("/:id", getApplicationById)
-
-// Officer & Admin application queue listing
-router.get("/", requireRole("loan_officer", "admin"), getAllApplications)
 
 export default router

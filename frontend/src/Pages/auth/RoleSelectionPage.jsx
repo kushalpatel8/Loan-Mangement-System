@@ -129,25 +129,23 @@ export default function RoleSelectionPage({ onRoleSelected }) {
     <div className="max-w-4xl mx-auto py-10 px-4 sm:px-6">
       {/* Header */}
       <div className="text-center mb-10">
-        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-200 mb-4">
-          <svg className="w-4 h-4 text-amber-600" fill="currentColor" viewBox="0 0 20 20">
-            <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-          </svg>
-          One-Time Profile Configuration
+        <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold bg-amber-50/90 text-amber-900 border border-amber-200/80 mb-4 shadow-xs">
+          <span>🍃</span>
+          <span>One-Time Profile Configuration</span>
         </div>
-        <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight sm:text-4xl">
+        <h1 className="text-3xl font-extrabold text-[#3A1700] tracking-tight sm:text-4xl">
           Select Your Workspace Role
         </h1>
-        <p className="mt-3 text-slate-600 max-w-2xl mx-auto text-sm sm:text-base">
-          Welcome to <strong className="text-slate-900">Correm Loan Management System</strong>. Please select your official role within the platform.
+        <p className="mt-3 text-[#5C3D2E] max-w-2xl mx-auto text-sm sm:text-base leading-relaxed">
+          Welcome to <strong className="text-[#3A1700]">Correm Loan Management System</strong>. Please select your official role within the platform.
         </p>
-        <div className="mt-3 inline-block bg-rose-50 border border-rose-200 rounded-lg px-4 py-2 text-xs font-medium text-rose-800">
+        <div className="mt-3 inline-block bg-rose-50/80 border border-rose-200 rounded-xl px-4 py-2 text-xs font-medium text-rose-800">
           ⚠️ <strong>Strict Security Policy:</strong> Once you select and confirm your role, it will be <strong>permanently locked</strong> to your account and <strong>cannot be changed</strong>.
         </div>
       </div>
 
       {error && (
-        <div className="mb-6 p-4 bg-rose-50 border border-rose-200 text-rose-700 text-sm rounded-xl flex items-center gap-3">
+        <div className="mb-6 p-4 bg-rose-50 border border-rose-200 text-rose-700 text-sm rounded-2xl flex items-center gap-3">
           <svg className="w-5 h-5 text-rose-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
@@ -165,13 +163,13 @@ export default function RoleSelectionPage({ onRoleSelected }) {
               onClick={() => setSelectedRole(r.id)}
               className={`cursor-pointer relative flex flex-col justify-between rounded-2xl p-6 border-2 transition-all duration-200 ${
                 isSelected
-                  ? 'border-blue-600 bg-white shadow-xl shadow-blue-500/10 ring-2 ring-blue-600/20'
-                  : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-md'
+                  ? 'border-amber-500 bg-white shadow-xl shadow-amber-500/10 ring-2 ring-amber-500/20'
+                  : 'border-stone-200/80 bg-white/80 hover:border-stone-300 hover:bg-white hover:shadow-md'
               }`}
             >
               {isSelected && (
                 <div className="absolute top-4 right-4">
-                  <div className="w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center text-white">
+                  <div className="w-6 h-6 bg-gradient-to-r from-amber-500 to-orange-500 rounded-full flex items-center justify-center text-white shadow-sm">
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
                     </svg>
@@ -182,30 +180,30 @@ export default function RoleSelectionPage({ onRoleSelected }) {
               <div>
                 <div className="mb-4">{r.icon}</div>
                 <div className="flex items-center gap-2 mb-2">
-                  <span className={`text-[11px] font-bold px-2 py-0.5 rounded border uppercase tracking-wide ${r.badgeColor}`}>
+                  <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full border uppercase tracking-wide ${r.badgeColor}`}>
                     {r.badge}
                   </span>
                 </div>
-                <h3 className="text-lg font-bold text-slate-900 mb-2">{r.title}</h3>
-                <p className="text-xs text-slate-500 mb-4 leading-relaxed">{r.description}</p>
-                <div className="border-t border-slate-100 pt-3 space-y-1.5">
-                  <p className="text-[11px] font-semibold text-slate-700">Capabilities:</p>
+                <h3 className="text-lg font-bold text-[#3A1700] mb-2">{r.title}</h3>
+                <p className="text-xs text-stone-600 mb-4 leading-relaxed">{r.description}</p>
+                <div className="border-t border-stone-100 pt-3 space-y-1.5">
+                  <p className="text-[11px] font-semibold text-stone-700">Capabilities:</p>
                   {r.features.map((feat, idx) => (
-                    <div key={idx} className="flex items-start gap-1.5 text-xs text-slate-600">
-                      <span className="text-blue-500 mt-0.5 font-bold">✓</span>
+                    <div key={idx} className="flex items-start gap-1.5 text-xs text-stone-600">
+                      <span className="text-amber-600 mt-0.5 font-bold">✓</span>
                       <span>{feat}</span>
                     </div>
                   ))}
                 </div>
               </div>
 
-              <div className="mt-6 pt-4 border-t border-slate-100">
+              <div className="mt-6 pt-4 border-t border-stone-100">
                 <button
                   type="button"
-                  className={`w-full py-2 px-3 rounded-lg text-xs font-semibold transition ${
+                  className={`w-full py-2.5 px-3 rounded-xl text-xs font-semibold transition ${
                     isSelected
-                      ? 'bg-blue-600 text-white shadow-sm'
-                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                      ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-sm font-bold'
+                      : 'bg-[#F8F5EE] text-stone-800 hover:bg-[#F0ECE2] border border-stone-200/90'
                   }`}
                 >
                   {isSelected ? 'Selected' : 'Choose Role'}
@@ -217,9 +215,9 @@ export default function RoleSelectionPage({ onRoleSelected }) {
       </div>
 
       {/* Confirmation & Permanent Lock Action */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-6 sm:p-8 shadow-sm">
+      <div className="bg-white border border-stone-200/80 rounded-3xl p-6 sm:p-8 shadow-md shadow-stone-200/40">
         {selectedRole === 'admin' && (
-          <div className="mb-6 p-4 rounded-xl bg-amber-50 border border-amber-200">
+          <div className="mb-6 p-4 rounded-2xl bg-amber-50 border border-amber-200">
             <label className="block text-xs font-bold text-amber-900 uppercase tracking-wider mb-1.5">
               Admin Passkey / Verification Token <span className="text-rose-600">*</span>
             </label>
@@ -231,7 +229,7 @@ export default function RoleSelectionPage({ onRoleSelected }) {
               placeholder="Enter Admin Token"
               value={adminToken}
               onChange={(e) => setAdminToken(e.target.value)}
-              className="w-full sm:w-80 px-3 py-2 bg-white border border-amber-300 rounded-lg text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+              className="w-full sm:w-80 px-3.5 py-2 bg-white border border-amber-300 rounded-xl text-sm text-stone-900 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
             />
           </div>
         )}
@@ -243,19 +241,19 @@ export default function RoleSelectionPage({ onRoleSelected }) {
                 type="checkbox"
                 checked={confirmed}
                 onChange={(e) => setConfirmed(e.target.checked)}
-                className="mt-1 w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-slate-300 cursor-pointer"
+                className="mt-1 w-4 h-4 rounded text-amber-600 focus:ring-amber-500 border-stone-300 cursor-pointer accent-amber-600"
               />
-              <span className="text-xs sm:text-sm text-slate-700">
+              <span className="text-xs sm:text-sm text-stone-700">
                 I understand that selecting{' '}
-                <strong className="text-slate-900 font-bold">
+                <strong className="text-[#3A1700] font-bold">
                   {roles.find((r) => r.id === selectedRole)?.title}
                 </strong>{' '}
                 is a <span className="text-rose-600 font-bold">one-time permanent choice</span> and I will{' '}
                 <strong>never be able to change my role</strong> afterwards.
               </span>
             </label>
-            <p className="text-xs text-slate-400">
-              Logged in as <span className="font-semibold text-slate-600">{user?.primaryEmailAddress?.emailAddress}</span>
+            <p className="text-xs text-stone-500">
+              Logged in as <span className="font-semibold text-stone-700">{user?.primaryEmailAddress?.emailAddress}</span>
             </p>
           </div>
 
@@ -263,10 +261,10 @@ export default function RoleSelectionPage({ onRoleSelected }) {
             type="button"
             disabled={!confirmed || loading}
             onClick={handleConfirmRole}
-            className={`sm:shrink-0 px-6 py-3 rounded-xl text-sm font-bold text-white transition flex items-center justify-center gap-2 ${
+            className={`sm:shrink-0 px-7 py-3.5 rounded-xl text-sm font-bold text-white transition flex items-center justify-center gap-2 cursor-pointer ${
               !confirmed || loading
-                ? 'bg-slate-300 cursor-not-allowed text-slate-500'
-                : 'bg-blue-600 hover:bg-blue-500 shadow-lg shadow-blue-500/20 active:scale-[0.98]'
+                ? 'bg-stone-300 cursor-not-allowed text-stone-500'
+                : 'bg-gradient-to-r from-amber-500 via-amber-600 to-orange-500 hover:from-amber-600 hover:to-orange-600 shadow-lg shadow-orange-500/25 active:scale-95'
             }`}
           >
             {loading ? (

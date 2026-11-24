@@ -1,3 +1,4 @@
+import mongoose from "mongoose"
 import LoanApplication from "../models/LoanApplication.js"
 import AuditLog from "../models/AuditLog.js"
 
@@ -53,7 +54,7 @@ export const saveDraft = async (req, res) => {
 
     let application
 
-    if (applicationId) {
+    if (applicationId && mongoose.Types.ObjectId.isValid(applicationId)) {
       application = await LoanApplication.findOne({ _id: applicationId, applicantId })
       if (!application) {
         return res.status(404).json({ success: false, message: "Draft application not found" })
@@ -116,12 +117,39 @@ export const submitApplication = async (req, res) => {
     const applicantId = req.user.id
     const { id } = req.params
 
-    const application = await LoanApplication.findOne({ _id: id, applicantId })
+    let application = null
+    if (id && mongoose.Types.ObjectId.isValid(id)) {
+      application = await LoanApplication.findOne({ _id: id, applicantId })
+    }
+
+    // Direct submission or fallback to existing draft
+    if (!application) {
+      if (req.body && (req.body.personalDetails || req.body.loanDetails)) {
+        application = new LoanApplication({
+          applicantId,
+          isDraft: true,
+          status: "draft",
+          personalDetails: req.body.personalDetails || {},
+          loanDetails: req.body.loanDetails || {},
+          incomeDetails: req.body.incomeDetails || {},
+          documents: req.body.documents || []
+        })
+      } else {
+        application = await LoanApplication.findOne({ applicantId, status: "draft" }).sort({ createdAt: -1 })
+      }
+    }
+
     if (!application) {
       return res.status(404).json({ success: false, message: "Application not found" })
     }
 
-    if (application.status !== "draft") {
+    // Merge any updated payload fields provided in request body
+    if (req.body?.personalDetails) application.personalDetails = { ...application.personalDetails?.toObject?.() || {}, ...req.body.personalDetails }
+    if (req.body?.loanDetails) application.loanDetails = { ...application.loanDetails?.toObject?.() || {}, ...req.body.loanDetails }
+    if (req.body?.incomeDetails) application.incomeDetails = { ...application.incomeDetails?.toObject?.() || {}, ...req.body.incomeDetails }
+    if (req.body?.documents) application.documents = req.body.documents
+
+    if (application.status !== "draft" && application.status !== "submitted") {
       return res.status(400).json({ success: false, message: `Application is already ${application.status}` })
     }
 
@@ -181,27 +209,49 @@ export const getMyApplications = async (req, res) => {
     const skip = (page - 1) * limit
 
     const { status, loanType } = req.query
-    const filter = { applicantId }
+    const userEmail = (req.user.email || req.query.email || "").toLowerCase().trim()
+
+    // Strict applicant scoping:
+    // User can only see applications belonging to their own user ID or their verified email address
+    const filter = {
+      $or: [
+        { applicantId },
+        ...(userEmail ? [{ "personalDetails.email": userEmail }] : [])
+      ]
+    }
 
     if (status) filter.status = status
     if (loanType) filter["loanDetails.loanType"] = loanType
 
     const [applications, total] = await Promise.all([
       LoanApplication.find(filter)
+        .populate("applicantId", "name email phone")
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit),
       LoanApplication.countDocuments(filter)
     ])
 
+    // Strict server-side verification: exclude any record where email belongs to a different applicant
+    const isolatedApplications = applications.filter((app) => {
+      const appEmail = (app.applicantId?.email || app.personalDetails?.email || "").toLowerCase().trim()
+      const appApplicantId = (app.applicantId?._id || app.applicantId || "").toString()
+      
+      // If userEmail is known, and app has an email, it MUST match userEmail
+      if (userEmail && appEmail && appEmail !== userEmail) {
+        return false // Belongs to a different applicant!
+      }
+      return appApplicantId === req.user.id || (userEmail && appEmail === userEmail)
+    })
+
     return res.status(200).json({
       success: true,
-      data: applications,
+      data: isolatedApplications,
       pagination: {
-        total,
+        total: isolatedApplications.length,
         page,
         limit,
-        totalPages: Math.ceil(total / limit)
+        totalPages: Math.ceil(isolatedApplications.length / limit)
       }
     })
   } catch (error) {
@@ -222,9 +272,15 @@ export const getApplicationById = async (req, res) => {
       return res.status(404).json({ success: false, message: "Application not found" })
     }
 
-    // Role check: Applicant can only view their own
-    if (req.user.role === "applicant" && application.applicantId._id.toString() !== req.user.id) {
-      return res.status(403).json({ success: false, message: "Access denied to this application" })
+    // Role check: Applicant can strictly only view their own
+    if (req.user.role === "applicant") {
+      const appApplicantId = (application.applicantId?._id || application.applicantId || "").toString()
+      const appEmail = (application.applicantId?.email || application.personalDetails?.email || "").toLowerCase().trim()
+      const userEmail = (req.user.email || "").toLowerCase().trim()
+
+      if (appApplicantId !== req.user.id && (!userEmail || appEmail !== userEmail)) {
+        return res.status(403).json({ success: false, message: "Access denied to this application" })
+      }
     }
 
     // Fetch chronological audit timeline

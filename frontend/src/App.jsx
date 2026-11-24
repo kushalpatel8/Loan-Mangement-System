@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { Routes, Route, Link, useLocation } from 'react-router-dom'
 import { Show, UserButton } from '@clerk/react'
 import SignInPage from './Pages/auth/SignInPage'
@@ -25,9 +25,15 @@ function App() {
     return null
   })
 
-  const handleUserSynced = (user) => {
-    setCurrentUser(user)
-  }
+  const handleUserSynced = useCallback((user) => {
+    if (!user) return
+    setCurrentUser((prev) => {
+      if (prev?.role === user.role && prev?.roleSelected === user.roleSelected) {
+        return prev
+      }
+      return user
+    })
+  }, [])
 
   const roleBadge = () => {
     if (!currentUser || !currentUser.roleSelected) return null
@@ -170,8 +176,15 @@ function App() {
         </nav>
       </header>
 
-      {/* Main Page Content */}
-      <main className="flex-1 w-full">
+      {/* Main Page Content with Warm Ambient Glow Background */}
+      <main className="flex-1 w-full relative">
+        {/* Soft background ambient gradient glow blobs matching Home Page */}
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-6xl h-[620px] pointer-events-none -z-10 opacity-60">
+          <div className="absolute top-4 left-1/4 w-96 h-96 bg-gradient-to-tr from-amber-200/50 via-rose-200/40 to-orange-100/30 rounded-full blur-3xl transform -translate-y-12"></div>
+          <div className="absolute top-12 right-1/4 w-96 h-96 bg-gradient-to-bl from-pink-200/40 via-amber-100/50 to-orange-200/40 rounded-full blur-3xl transform translate-x-12"></div>
+          <div className="absolute top-28 left-1/2 -translate-x-1/2 w-[600px] h-80 bg-gradient-to-b from-amber-100/40 via-rose-100/30 to-transparent rounded-full blur-2xl"></div>
+        </div>
+
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/select-role" element={<RoleSelectionPage onRoleSelected={handleUserSynced} />} />

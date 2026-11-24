@@ -432,32 +432,6 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* Call to Action Footer Card */}
-        <section className="bg-gradient-to-r from-[#2C1810] via-[#3D2015] to-[#25120B] text-white rounded-3xl p-8 sm:p-12 text-center mb-16 relative overflow-hidden shadow-xl">
-          <div className="relative z-10">
-            <h3 className="text-2xl sm:text-4xl font-extrabold mb-4 tracking-tight">
-              Ready to submit or review credit applications?
-            </h3>
-            <p className="text-stone-300 max-w-xl mx-auto mb-8 text-sm sm:text-base leading-relaxed">
-              Sign up today to explore multi-step credit applications, or access your authorized portal as a Loan Officer or Administrator.
-            </p>
-            <div className="flex flex-wrap justify-center gap-4">
-              <Link
-                to="/applicant/apply"
-                className="px-8 py-3.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 font-bold rounded-xl text-white shadow-lg shadow-orange-500/30 transition transform active:scale-95"
-              >
-                Apply Now
-              </Link>
-              <Link
-                to="/login"
-                className="px-8 py-3.5 bg-white/10 hover:bg-white/15 border border-white/20 font-semibold rounded-xl text-white transition"
-              >
-                Sign In to Account
-              </Link>
-            </div>
-          </div>
-        </section>
-
         {/* Footer */}
         <footer className="pt-8 pb-12 border-t border-stone-200 text-center text-xs text-stone-500">
           <p>&copy; {new Date().getFullYear()} Correm Advisory India Pvt. Ltd. — Loan Management System (LMS).</p>
