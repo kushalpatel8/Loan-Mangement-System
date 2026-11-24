@@ -6,7 +6,10 @@ export const connectDB = async () => {
     return mongoose.connection
   }
 
-  const uri = process.env.MONGODB_URI
+  const uri =
+    process.env.MONGODB_URI ||
+    "mongodb+srv://pkushal649_db_user:ylCOx0BrAtL0gedr@cluster0.codbn57.mongodb.net"
+
   if (!uri) {
     console.error("MONGODB_URI is not defined in environment variables.")
     return

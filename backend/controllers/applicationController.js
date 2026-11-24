@@ -302,7 +302,7 @@ export const getApplicationById = async (req, res) => {
 export const getAllApplications = async (req, res) => {
   try {
     const page = Math.max(1, parseInt(req.query.page) || 1)
-    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 10))
+    const limit = Math.min(200, Math.max(1, parseInt(req.query.limit) || 100))
     const skip = (page - 1) * limit
 
     const { status, loanType, startDate, endDate, q } = req.query

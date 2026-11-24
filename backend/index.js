@@ -45,7 +45,7 @@ const allowedOrigins = [
   .filter(Boolean)
   .map((url) => url.replace(/\/$/, ""))
 
-// Enable CORS for frontend applications
+// Enable CORS for frontend applications (handles standard requests & preflights)
 app.use(
   cors({
     origin: (origin, callback) => {
@@ -71,9 +71,6 @@ app.use(
     ]
   })
 )
-
-// Preflight OPTIONS handler
-app.options("*", cors())
 
 // Body parsers
 app.use(express.json({ limit: "10mb" }))

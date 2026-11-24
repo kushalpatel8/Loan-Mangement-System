@@ -102,6 +102,7 @@ export const getApplications = async (filters = {}) => {
   try {
     const headers = await getAuthHeaders()
     const query = new URLSearchParams()
+    query.append('limit', '100')
     if (filters.status && filters.status !== 'all') query.append('status', filters.status)
     if (filters.loanType && filters.loanType !== 'all') query.append('loanType', filters.loanType)
     if (filters.search) query.append('q', filters.search)
@@ -122,6 +123,9 @@ export const getApplications = async (filters = {}) => {
         // Cache live records locally so all browser tabs and views share them
         liveApps.forEach((app) => saveLocalApp(app))
       }
+    } else {
+      const errText = await res.text().catch(() => '')
+      console.warn(`Live API /applications returned status ${res.status}:`, errText)
     }
   } catch (err) {
     console.warn('Live API /applications query error:', err.message)
