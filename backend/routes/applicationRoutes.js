@@ -66,7 +66,8 @@ router.post("/upload-document", uploadLimiter, uploadMultiple("documents", 5), a
           uploadedBy: req.user?.id || null
         })
 
-        const fileUrl = `/api/v1/applications/document/${docRecord._id}`
+        const baseUrl = (process.env.BACKEND_URL || "").replace(/\/$/, "")
+        const fileUrl = `${baseUrl}/api/v1/applications/document/${docRecord._id}`
 
         return {
           _id: docRecord._id.toString(),
@@ -129,11 +130,14 @@ router.post("/:id/upload", uploadLimiter, uploadMultiple("documents", 5), async 
           uploadedBy: req.user?.id || null
         })
 
+        const baseUrl = (process.env.BACKEND_URL || "").replace(/\/$/, "")
+        const fileUrl = `${baseUrl}/api/v1/applications/document/${docRecord._id}`
+
         return {
           _id: docRecord._id.toString(),
           documentType,
           fileName: file.originalname,
-          fileUrl: `/api/v1/applications/document/${docRecord._id}`,
+          fileUrl,
           fileSize: file.size,
           mimeType: file.mimetype || "application/pdf",
           uploadedAt: docRecord.createdAt

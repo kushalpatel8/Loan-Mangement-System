@@ -58,10 +58,21 @@ export default function OfficerPage() {
     const docs = []
     const seen = new Set()
 
+    const resolveUrl = (raw) => {
+      if (!raw) return ''
+      if (raw.startsWith('http://') || raw.startsWith('https://') || raw.startsWith('blob:')) return raw
+      const backendBase = (import.meta.env.VITE_BACKEND_URL || (import.meta.env.VITE_API_URL || '').replace(/\/api\/v1\/?$/, '')).replace(/\/$/, '')
+      if (backendBase && raw.startsWith('/')) {
+        return `${backendBase}${raw}`
+      }
+      return raw
+    }
+
     const addDoc = (doc, source = 'Initial Submission') => {
       if (!doc) return
       const fileName = doc.fileName || doc.name || (doc.fileUrl ? doc.fileUrl.split('/').pop().split('?')[0] : 'Document')
-      const fileUrl = doc.fileUrl || doc.secure_url || doc.url || ''
+      const rawUrl = doc.fileUrl || doc.secure_url || doc.url || ''
+      const fileUrl = resolveUrl(rawUrl)
       if (!fileUrl && !fileName) return
 
       const key = `${doc._id || ''}_${fileName}_${fileUrl}`

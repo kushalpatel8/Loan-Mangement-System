@@ -303,7 +303,14 @@ export const uploadDocumentFile = async (file, documentType = 'id_proof') => {
     if (res.ok) {
       const json = await res.json()
       if (json.documents && json.documents.length > 0) {
-        return json.documents[0]
+        const doc = json.documents[0]
+        if (doc.fileUrl && doc.fileUrl.startsWith('/') && !doc.fileUrl.startsWith('//')) {
+          const backendBase = (import.meta.env.VITE_BACKEND_URL || (import.meta.env.VITE_API_URL || '').replace(/\/api\/v1\/?$/, '')).replace(/\/$/, '')
+          if (backendBase) {
+            doc.fileUrl = `${backendBase}${doc.fileUrl}`
+          }
+        }
+        return doc
       }
     } else {
       const errJson = await res.json().catch(() => ({}))

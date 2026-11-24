@@ -17,18 +17,63 @@ dotenv.config()
 const app = express()
 const port = process.env.PORT || 5000
 
+// Trust reverse proxy (Required for Vercel & express-rate-limit)
+app.set("trust proxy", 1)
+
 // Connect to MongoDB
 connectDB()
+
+// Middleware to ensure DB connection is active before servicing requests in serverless environments
+app.use(async (req, res, next) => {
+  try {
+    await connectDB()
+    next()
+  } catch (err) {
+    next(err)
+  }
+})
+
+// Allowed CORS origins
+const allowedOrigins = [
+  "https://frontend-xi-steel-92.vercel.app",
+  "https://loan-mangement-system.vercel.app",
+  "http://localhost:5173",
+  "http://localhost:3000",
+  process.env.CLIENT_URL,
+  process.env.FRONTEND_URL
+]
+  .filter(Boolean)
+  .map((url) => url.replace(/\/$/, ""))
 
 // Enable CORS for frontend applications
 app.use(
   cors({
-    origin: process.env.CLIENT_URL || "http://localhost:5173",
+    origin: (origin, callback) => {
+      if (!origin) return callback(null, true)
+      const cleanOrigin = origin.replace(/\/$/, "")
+      if (
+        allowedOrigins.includes(cleanOrigin) ||
+        cleanOrigin.endsWith(".vercel.app")
+      ) {
+        return callback(null, true)
+      }
+      return callback(null, true) // Permissive fallback for preview branches
+    },
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "x-user-email", "x-user-name", "x-user-role"]
+    allowedHeaders: [
+      "Content-Type",
+      "Authorization",
+      "x-user-email",
+      "x-user-name",
+      "x-user-role",
+      "x-clerk-user-id"
+    ]
   })
 )
+
+// Preflight OPTIONS handler
+app.options("*", cors())
 
 // Body parsers
 app.use(express.json({ limit: "10mb" }))
@@ -98,8 +143,11 @@ app.get("/", (req, res) => {
 app.use(notFoundHandler)
 app.use(errorHandler)
 
-app.listen(port, () => {
-  console.log(`LMS Server running on port ${port}`)
-})
+// Only start local listener when not running in Vercel serverless environment
+if (!process.env.VERCEL) {
+  app.listen(port, () => {
+    console.log(`LMS Server running on port ${port}`)
+  })
+}
 
 export default app
