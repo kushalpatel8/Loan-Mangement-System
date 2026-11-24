@@ -8,7 +8,7 @@
     "dev": "nodemon index.js"
   },
   "keywords": [],
-  "author": "",
+  "author": "Kushal Patel",
   "license": "ISC",
   "type": "module",
   "dependencies": {
