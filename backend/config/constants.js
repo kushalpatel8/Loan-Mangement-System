@@ -1,0 +1,77 @@
+export const ROLES = {
+  APPLICANT: "applicant",
+  LOAN_OFFICER: "loan_officer",
+  ADMIN: "admin"
+}
+
+export const LOAN_TYPES = {
+  PERSONAL: "personal",
+  HOME: "home",
+  VEHICLE: "vehicle",
+  BUSINESS: "business"
+}
+
+export const LOAN_INTEREST_RATES = {
+  personal: 12.0,
+  home: 8.5,
+  vehicle: 9.5,
+  business: 14.0
+}
+
+export const APPLICATION_STATUSES = {
+  DRAFT: "draft",
+  SUBMITTED: "submitted",
+  UNDER_REVIEW: "under_review",
+  MORE_INFO_NEEDED: "more_info_needed",
+  RECOMMENDED_APPROVAL: "recommended_approval",
+  RECOMMENDED_REJECTION: "recommended_rejection",
+  APPROVED: "approved",
+  REJECTED: "rejected"
+}
+
+export const AUDIT_ACTIONS = {
+  APPLICATION_CREATED: "APPLICATION_CREATED",
+  DRAFT_SAVED: "DRAFT_SAVED",
+  APPLICATION_SUBMITTED: "APPLICATION_SUBMITTED",
+  ELIGIBILITY_CHECK_RUN: "ELIGIBILITY_CHECK_RUN",
+  OFFICER_REVIEW_STARTED: "OFFICER_REVIEW_STARTED",
+  MORE_INFO_REQUESTED: "MORE_INFO_REQUESTED",
+  MORE_INFO_SUBMITTED: "MORE_INFO_SUBMITTED",
+  RECOMMENDED_APPROVAL: "RECOMMENDED_APPROVAL",
+  RECOMMENDED_REJECTION: "RECOMMENDED_REJECTION",
+  FINAL_APPROVAL: "FINAL_APPROVAL",
+  FINAL_REJECTION: "FINAL_REJECTION",
+  REPAYMENT_SCHEDULE_GENERATED: "REPAYMENT_SCHEDULE_GENERATED",
+  EMI_STATUS_UPDATED: "EMI_STATUS_UPDATED"
+}
+
+export const INSTALLMENT_STATUSES = {
+  PENDING: "pending",
+  PAID: "paid",
+  OVERDUE: "overdue"
+}
+
+export const DOCUMENT_TYPES = {
+  ID_PROOF: "id_proof",
+  INCOME_PROOF: "income_proof",
+  ADDRESS_PROOF: "address_proof",
+  BANK_STATEMENT: "bank_statement",
+  OTHER: "other"
+}
+
+export const PAGINATION_DEFAULTS = {
+  PAGE: 1,
+  LIMIT: 10,
+  MAX_LIMIT: 100
+}
+
+export default {
+  ROLES,
+  LOAN_TYPES,
+  LOAN_INTEREST_RATES,
+  APPLICATION_STATUSES,
+  AUDIT_ACTIONS,
+  INSTALLMENT_STATUSES,
+  DOCUMENT_TYPES,
+  PAGINATION_DEFAULTS
+}
