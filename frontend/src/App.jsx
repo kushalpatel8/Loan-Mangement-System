@@ -1,8 +1,8 @@
 import { Routes, Route, Link } from 'react-router-dom'
 import { Show, UserButton } from '@clerk/react'
-import SignInPage from './auth/SignInPage'
-import SignUpPage from './auth/SignUpPage'
-import LoginPage from './auth/LoginPage'
+import SignInPage from './Pages/auth/SignInPage'
+import SignUpPage from './Pages/auth/SignUpPage'
+import LoginPage from './Pages/auth/LoginPage'
 import HomePage from './Pages/homePage'
 
 function App() {
